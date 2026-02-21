@@ -4,13 +4,10 @@ export class GeminiService {
   private static instance: GoogleGenerativeAI | null = null;
 
   static async initialize(): Promise<void> {
-    // Get API key from environment variable
     const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
-    
     if (!apiKey || apiKey === 'your_gemini_api_key_here') {
       throw new Error('Gemini API key not found. Please set VITE_GEMINI_API_KEY in your .env file.');
     }
-    
     this.instance = new GoogleGenerativeAI(apiKey);
   }
 
@@ -18,12 +15,15 @@ export class GeminiService {
     return this.instance !== null;
   }
 
+  private static getModel(modelName: string) {
+    if (!this.instance) throw new Error('Gemini service not initialized');
+    return this.instance.getGenerativeModel({ model: modelName });
+  }
+
   static async analyzeResume(resume: string, jobDescription: string) {
     if (!this.instance) {
       throw new Error('Gemini service not initialized');
     }
-
-    const model = this.instance.getGenerativeModel({ model: 'gemini-1.5-flash' });
 
     const prompt = `
 Analyze the following resume against the job description and provide a comprehensive analysis.
@@ -62,69 +62,52 @@ Focus on:
 Return ONLY the JSON object, no markdown, no code blocks, no additional text.
 `;
 
-    try {
-      const result = await model.generateContent(prompt);
-      const response = await result.response;
-      const text = response.text();
+    // Try flash-latest first, then fall back to pro-latest if model not found
+    const modelCandidates = ['gemini-1.5-flash-latest', 'gemini-1.5-pro-latest'];
 
-      // Clean the response text to extract JSON from markdown code blocks
-      let cleanedText = text.trim();
-      
-      // Remove markdown code block markers if present
-      if (cleanedText.startsWith('```json')) {
-        cleanedText = cleanedText.replace(/^```json\s*/, '');
-      }
-      if (cleanedText.startsWith('```')) {
-        cleanedText = cleanedText.replace(/^```\s*/, '');
-      }
-      if (cleanedText.endsWith('```')) {
-        cleanedText = cleanedText.replace(/\s*```$/, '');
-      }
-      
-      // Remove any leading/trailing whitespace
-      cleanedText = cleanedText.trim();
-
+    let lastError: any = null;
+    for (const name of modelCandidates) {
       try {
-        return JSON.parse(cleanedText);
-      } catch (parseError) {
-        console.error('Failed to parse Gemini response:', text);
-        console.error('Cleaned text:', cleanedText);
-        console.error('Parse error:', parseError);
-        
-        // Try to extract JSON from the response if it's embedded in text
-        const jsonMatch = cleanedText.match(/\{[\s\S]*\}/);
-        if (jsonMatch) {
-          try {
+        const model = this.getModel(name);
+        const result = await model.generateContent(prompt);
+        const response = await result.response;
+        const text = response.text();
+
+        let cleanedText = text.trim();
+        if (cleanedText.startsWith('```json')) cleanedText = cleanedText.replace(/^```json\s*/, '');
+        if (cleanedText.startsWith('```')) cleanedText = cleanedText.replace(/^```\s*/, '');
+        if (cleanedText.endsWith('```')) cleanedText = cleanedText.replace(/\s*```$/, '');
+        cleanedText = cleanedText.trim();
+
+        try {
+          return JSON.parse(cleanedText);
+        } catch {
+          const jsonMatch = cleanedText.match(/\{[\s\S]*\}/);
+          if (jsonMatch) {
             return JSON.parse(jsonMatch[0]);
-          } catch (secondParseError) {
-            console.error('Second parse attempt failed:', secondParseError);
           }
+          throw new Error('Invalid JSON response from Gemini. Please try again.');
         }
-        
-        throw new Error('Invalid JSON response from Gemini. Please try again.');
+      } catch (error: any) {
+        lastError = error;
+        const msg = String(error?.message || '');
+        // If NOT_FOUND or model unsupported, try next candidate
+        if (msg.includes('NOT_FOUND') || msg.includes('is not supported for generateContent')) {
+          continue;
+        }
+        // Other errors should bubble up
+        throw this.mapGeminiError(error);
       }
-    } catch (error: any) {
-      console.error('Gemini API error:', error);
-      
-      // Handle specific Gemini errors
-      if (error?.message?.includes('API_KEY_INVALID')) {
-        throw new Error('Invalid Gemini API key. Please check your API key in settings.');
-      } else if (error?.message?.includes('QUOTA_EXCEEDED')) {
-        throw new Error('Gemini API quota exceeded. Please check your usage limits.');
-      } else if (error?.message?.includes('PERMISSION_DENIED')) {
-        throw new Error('Gemini API access denied. Please check your API key permissions.');
-      }
-      
-      throw new Error('Failed to analyze resume. Please check your internet connection and try again.');
     }
+
+    // If we exhausted candidates
+    throw this.mapGeminiError(lastError);
   }
 
   static async generateImprovedResume(resume: string, jobDescription: string, suggestions: string[]) {
     if (!this.instance) {
       throw new Error('Gemini service not initialized');
     }
-
-    const model = this.instance.getGenerativeModel({ model: 'gemini-1.5-flash' });
 
     const prompt = `
 Based on the following resume, job description, and improvement suggestions, generate an improved version of the resume.
@@ -148,22 +131,43 @@ Please rewrite the resume incorporating the suggestions while:
 Return only the improved resume text without any additional formatting or explanations.
 `;
 
-    try {
-      const result = await model.generateContent(prompt);
-      const response = await result.response;
-      const text = response.text();
+    const modelCandidates = ['gemini-1.5-flash-latest', 'gemini-1.5-pro-latest'];
 
-      return text.trim();
-    } catch (error: any) {
-      console.error('Gemini API error:', error);
-      
-      if (error?.message?.includes('API_KEY_INVALID')) {
-        throw new Error('Invalid Gemini API key. Please check your API key in settings.');
-      } else if (error?.message?.includes('QUOTA_EXCEEDED')) {
-        throw new Error('Gemini API quota exceeded. Please check your usage limits.');
+    let lastError: any = null;
+    for (const name of modelCandidates) {
+      try {
+        const model = this.getModel(name);
+        const result = await model.generateContent(prompt);
+        const response = await result.response;
+        const text = response.text();
+        return text.trim();
+      } catch (error: any) {
+        lastError = error;
+        const msg = String(error?.message || '');
+        if (msg.includes('NOT_FOUND') || msg.includes('is not supported for generateContent')) {
+          continue;
+        }
+        throw this.mapGeminiError(error);
       }
-      
-      throw new Error('Failed to generate improved resume. Please try again.');
     }
+
+    throw this.mapGeminiError(lastError);
+  }
+
+  private static mapGeminiError(error: any): Error {
+    const message = String(error?.message || '');
+    if (message.includes('API_KEY_INVALID')) {
+      return new Error('Invalid Gemini API key. Please check your API key in settings.');
+    }
+    if (message.includes('QUOTA_EXCEEDED')) {
+      return new Error('Gemini API quota exceeded. Please check your usage limits.');
+    }
+    if (message.includes('PERMISSION_DENIED')) {
+      return new Error('Gemini API access denied. Please check your API key permissions.');
+    }
+    if (message.includes('NOT_FOUND')) {
+      return new Error('Selected Gemini model is unavailable. Please try again in a moment.');
+    }
+    return new Error('Gemini request failed. Please try again.');
   }
 }
