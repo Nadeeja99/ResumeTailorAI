@@ -1,47 +1,70 @@
-# ResumeTailorAI 🚀
+# ResumeTailorAI
 
-> **AI-Powered Resume Optimization Tool** - Transform your resume with intelligent analysis and data-driven improvements to land your dream job.
+> **AI-Powered Resume Optimization Tool** — Transform your resume with intelligent analysis and data-driven improvements to land your dream job.
 
 [![React](https://img.shields.io/badge/React-18.3.1-blue.svg)](https://reactjs.org/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.5.3-blue.svg)](https://www.typescriptlang.org/)
 [![Vite](https://img.shields.io/badge/Vite-5.4.1-purple.svg)](https://vitejs.dev/)
 [![Tailwind CSS](https://img.shields.io/badge/Tailwind-3.4.11-38B2AC.svg)](https://tailwindcss.com/)
+[![Express](https://img.shields.io/badge/Express-4.x-black.svg)](https://expressjs.com/)
 
-## ✨ Features
+## Features
 
-### 🎯 **Smart Resume Analysis**
-- **AI-Powered Analysis**: Advanced AI analyzes your resume against job descriptions
-- **Keyword Matching**: Identifies missing keywords and skills alignment
-- **ATS Optimization**: Ensures your resume passes Applicant Tracking Systems
-- **Professional Improvements**: Generates optimized resume versions with actionable suggestions
+- **AI-Powered Analysis** — Analyzes your resume against a job description using Google Gemini
+- **Match Score** — Percentage-based compatibility with the job requirements
+- **Missing Keywords** — Specific terms from the job description absent from your resume
+- **ATS Optimization** — Ensures your resume passes Applicant Tracking Systems
+- **Optimized Resume Generation** — Rewrites your resume incorporating all suggestions
+- **Local Fallback** — Heuristic analysis runs instantly when the backend is unreachable
 
-### 📊 **Comprehensive Insights**
-- **Match Score**: Percentage-based compatibility with job requirements
-- **Missing Keywords**: Specific keywords you should add to your resume
-- **Strengths Analysis**: Highlights your resume's strong points
-- **Tone Analysis**: Evaluates professionalism and clarity
-- **ATS Optimization Score**: Ensures ATS system compatibility
+## Architecture
 
-### 🚀 **User Experience**
-- **Real-time Feedback**: Instant analysis with detailed breakdowns
-- **Modern UI**: Clean, professional interface built with shadcn/ui
-- **Responsive Design**: Works seamlessly on desktop and mobile
-- **One-Click Optimization**: Generate improved resume versions instantly
+This is a monorepo with a clear frontend/backend split:
 
-## 🛠️ Technology Stack
+```
+ResumeTailorAI/
+├── package.json          # Root orchestrator — runs both services via concurrently
+├── frontend/             # React 18 + Vite + TypeScript (port 8080)
+│   ├── src/
+│   │   ├── components/   # UI components (shadcn/ui)
+│   │   ├── pages/        # Index.tsx — main app page
+│   │   ├── services/     # gemini.ts — HTTP client calling the backend
+│   │   ├── hooks/
+│   │   └── lib/
+│   ├── public/
+│   ├── index.html
+│   ├── vite.config.ts    # Proxies /api/* → http://localhost:3001
+│   └── package.json
+└── backend/              # Express + TypeScript (port 3001)
+    ├── src/
+    │   ├── index.ts          # Server entry point
+    │   ├── services/
+    │   │   └── gemini.ts     # Gemini SDK calls (API key never sent to browser)
+    │   └── routes/
+    │       └── resume.ts     # POST /api/analyze, POST /api/generate-improved
+    └── package.json
+```
 
-- **Frontend**: React 18 + TypeScript
-- **Build Tool**: Vite
-- **Styling**: Tailwind CSS + shadcn/ui
-- **AI Service**: Google Gemini AI
-- **State Management**: React Hooks
-- **Routing**: React Router DOM
+The Gemini API key lives exclusively in `backend/.env` and is never bundled into the frontend.
 
-## 🚀 Quick Start
+## Technology Stack
+
+| Layer | Technology |
+|---|---|
+| Frontend framework | React 18 + TypeScript |
+| Build tool | Vite |
+| Styling | Tailwind CSS + shadcn/ui |
+| Backend | Node.js + Express + TypeScript |
+| AI provider | Google Gemini (`gemini-1.5-flash-latest`) |
+| File parsing | pdfjs-dist, mammoth |
+| PDF export | jspdf + html2canvas |
+
+## Quick Start
 
 ### Prerequisites
+
 - Node.js 18+ and npm
-- Gemini API key from Google AI Studio
+- A Gemini API key from [Google AI Studio](https://aistudio.google.com/)
 
 ### Installation
 
@@ -51,273 +74,105 @@
    cd ResumeTailorAI
    ```
 
-2. **Install dependencies**
+2. **Install all dependencies**
    ```bash
-   npm install
+   npm run install:all
    ```
 
-3. **Set up environment variables**
+3. **Configure the backend API key**
    ```bash
-   # Copy the environment file
-   cp .env .env.local
-   
-   # Edit .env.local with your API key
-   VITE_GEMINI_API_KEY=your_actual_gemini_api_key_here
+   cp backend/.env.example backend/.env
+   # Edit backend/.env and set your key:
+   # GEMINI_API_KEY=AIzaSy...your_actual_key_here
    ```
 
-4. **Start the development server**
+4. **Start both servers**
    ```bash
    npm run dev
    ```
 
-5. **Open your browser**
-   Navigate to `http://localhost:5173`
+5. **Open the app**
+   Navigate to `http://localhost:8080`
 
-## 🔑 API Key Setup
+## API Key Setup
 
-### Getting Your Gemini API Key
-
-1. **Visit Google AI Studio**
-   - Go to [Google AI Studio](https://aistudio.google.com/)
-   - Sign in with your Google account
-
-2. **Create API Key**
-   - Click "Get API Key" or "Create API Key"
-   - Copy the generated API key
-
-3. **Configure Environment**
-   ```bash
-   # In your .env.local file
-   VITE_GEMINI_API_KEY=AIzaSyC...your_actual_key_here
+1. Go to [Google AI Studio](https://aistudio.google.com/)
+2. Sign in and click **Get API Key** → **Create API Key**
+3. Copy the key and paste it into `backend/.env`:
+   ```
+   GEMINI_API_KEY=AIzaSy...your_actual_key_here
    ```
 
-### Security Notes
-- ✅ `.env.local` is automatically ignored by git
-- ✅ API keys are never exposed in the frontend code
-- ✅ Environment variables are only accessible at build time
+The key is only used server-side — it is never sent to the browser.
 
-## 📖 Usage Guide
+## Available Scripts
 
-### 1. **Prepare Your Resume**
-- Copy your resume text into the left panel
-- Ensure it's in plain text format for best analysis
-
-### 2. **Add Job Description**
-- Paste the job description in the right panel
-- Include the full job posting for comprehensive analysis
-
-### 3. **Analyze Your Resume**
-- Click "Analyze Resume" to get instant feedback
-- Review the detailed analysis and suggestions
-
-### 4. **Generate Optimized Version**
-- Click "Generate Optimized Resume" to create an improved version
-- The AI will incorporate all suggestions and improvements
-
-### 5. **Review and Download**
-- Compare the original and optimized versions
-- Download or copy the improved resume
-
-## 🎯 Analysis Features
-
-### **Match Score (0-100)**
-- Overall compatibility with job requirements
-- Based on keyword matching and skills alignment
-
-### **Missing Keywords**
-- Specific terms from the job description not found in your resume
-- Prioritized by importance and frequency
-
-### **Suggested Improvements**
-- Actionable recommendations to enhance your resume
-- Focused on impact, clarity, and ATS optimization
-
-### **Strengths Analysis**
-- Highlights your resume's strong points
-- Identifies areas where you excel
-
-### **Tone Analysis**
-- Evaluates professionalism and clarity
-- Provides feedback on writing style
-
-### **ATS Optimization**
-- Ensures compatibility with Applicant Tracking Systems
-- Suggests format and keyword optimizations
-
-## 🏗️ Project Structure
-
-```
-ResumeTailorAI/
-├── src/
-│   ├── components/          # React components
-│   │   ├── ui/             # shadcn/ui components
-│   │   ├── AnalysisResults.tsx
-│   │   ├── JobDescriptionInput.tsx
-│   │   ├── ResumeInput.tsx
-│   │   └── ResumePreview.tsx
-│   ├── pages/              # Page components
-│   │   ├── Index.tsx       # Main application page
-│   │   └── NotFound.tsx
-│   ├── services/           # API services
-│   │   └── gemini.ts       # Gemini AI service
-│   ├── hooks/              # Custom React hooks
-│   └── lib/                # Utility functions
-├── public/                 # Static assets
-├── .env                    # Environment template
-└── package.json           # Dependencies and scripts
-```
-
-## 🚀 Available Scripts
+Run these from the **project root**:
 
 ```bash
-# Development
-npm run dev          # Start development server
-
-# Production
-npm run build        # Build for production
-npm run preview      # Preview production build
-
-# Code Quality
-npm run lint         # Run ESLint
+npm run dev            # Start frontend (8080) + backend (3001) together
+npm run dev:frontend   # Start only the frontend
+npm run dev:backend    # Start only the backend
+npm run build          # Production build of the frontend
+npm run install:all    # Install deps in both frontend/ and backend/
 ```
 
-## 🔧 Configuration
+Run these from the **`frontend/`** folder:
 
-### Environment Variables
+```bash
+npm run dev            # Vite dev server
+npm run build          # Production build → frontend/dist/
+npm run preview        # Preview production build
+npm run lint           # ESLint
+```
+
+Run these from the **`backend/`** folder:
+
+```bash
+npm run dev            # tsx watch (auto-restarts on changes)
+npm run build          # Compile TypeScript → backend/dist/
+npm start              # Run compiled output
+```
+
+## API Endpoints
+
+| Method | Path | Body | Response |
+|---|---|---|---|
+| `POST` | `/api/analyze` | `{ resume, jobDescription }` | Analysis JSON |
+| `POST` | `/api/generate-improved` | `{ resume, jobDescription, suggestions }` | `{ improvedResume }` |
+
+## Environment Variables
+
+### `backend/.env`
 
 | Variable | Description | Required |
-|----------|-------------|----------|
-| `VITE_GEMINI_API_KEY` | Your Gemini API key | ✅ |
+|---|---|---|
+| `GEMINI_API_KEY` | Your Google Gemini API key | Yes |
+| `PORT` | Port for the backend server | No (default: 3001) |
 
-### Build Configuration
+### `frontend/.env`
 
-The project uses Vite for fast development and optimized builds:
+No secrets are stored here. The frontend proxies all `/api/*` requests through Vite to the backend.
 
-- **Development**: Hot module replacement, fast refresh
-- **Production**: Optimized bundles, tree shaking
-- **TypeScript**: Full type safety and IntelliSense
+## Usage
 
-## 🤝 Contributing
+1. **Paste your resume** into the left panel (plain text, or upload a PDF/Word file)
+2. **Paste the job description** into the right panel
+3. Click **Analyze Resume** — results appear with match score, missing keywords, strengths, tone and ATS scores
+4. Click **Generate Optimized Resume** — the AI rewrites your resume incorporating all suggestions
+5. Review and download the improved version
 
-1. **Fork the repository**
-2. **Create a feature branch**
-   ```bash
-   git checkout -b feature/amazing-feature
-   ```
-3. **Commit your changes**
-   ```bash
-   git commit -m 'Add amazing feature'
-   ```
-4. **Push to the branch**
-   ```bash
-   git push origin feature/amazing-feature
-   ```
-5. **Open a Pull Request**
+## Contributing
 
-## 📝 License
+1. Fork the repository
+2. Create a feature branch: `git checkout -b feature/my-feature`
+3. Commit your changes: `git commit -m 'Add my feature'`
+4. Push: `git push origin feature/my-feature`
+5. Open a Pull Request
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+## Acknowledgments
 
-## 🙏 Acknowledgments
-
-- **Google Gemini AI** for providing the AI analysis capabilities
-- **shadcn/ui** for the beautiful component library
-- **Tailwind CSS** for the utility-first CSS framework
-- **Vite** for the fast build tooling
-
-## 📞 Support
-
-If you encounter any issues or have questions:
-
-1. **Check the console** for detailed error messages
-2. **Verify your API key** is correctly set in `.env.local`
-3. **Ensure you have** the latest version of Node.js
-4. **Open an issue** on GitHub with detailed information
-
----
-
-**Made with ❤️ for job seekers everywhere**
-
-*Transform your resume, land your dream job!*
-
-## 🚀 Development
-
-### Local Development
-
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
-
-Follow these steps:
-
-```sh
-# Step 1: Clone the repository
-git clone <YOUR_GIT_URL>
-
-# Step 2: Navigate to the project directory
-cd ResumeTailorAI
-
-# Step 3: Install the necessary dependencies
-npm install
-
-# Step 4: Set up environment variables
-cp .env .env.local
-# Edit .env.local with your Gemini API key
-
-# Step 5: Start the development server
-npm run dev
-```
-
-### Code Editing
-
-**Use your preferred IDE**
-
-- VS Code, WebStorm, or any code editor
-- Full TypeScript support with IntelliSense
-- Hot module replacement for fast development
-
-**Edit directly in GitHub**
-
-- Navigate to the desired file(s)
-- Click the "Edit" button (pencil icon) at the top right
-- Make your changes and commit
-
-**Use GitHub Codespaces**
-
-- Navigate to the main page of your repository
-- Click on the "Code" button (green button) near the top right
-- Select the "Codespaces" tab
-- Click on "New codespace" to launch a new environment
-
-## 🚀 Deployment
-
-### Vercel (Recommended)
-
-1. **Connect your repository** to Vercel
-2. **Set environment variables** in Vercel dashboard
-3. **Deploy automatically** on every push
-
-### Netlify
-
-1. **Connect your repository** to Netlify
-2. **Set build command**: `npm run build`
-3. **Set publish directory**: `dist`
-4. **Add environment variables**
-
-### Manual Deployment
-
-```bash
-# Build the project
-npm run build
-
-# Deploy the dist folder to your hosting provider
-```
-
-## 🔧 Technologies Used
-
-This project is built with:
-
-- **Vite** - Fast build tool and dev server
-- **TypeScript** - Type-safe JavaScript
-- **React 18** - Modern React with hooks
-- **shadcn/ui** - Beautiful component library
-- **Tailwind CSS** - Utility-first CSS framework
-- **Google Gemini AI** - AI analysis capabilities
+- [Google Gemini AI](https://aistudio.google.com/) for AI capabilities
+- [shadcn/ui](https://ui.shadcn.com/) for the component library
+- [Tailwind CSS](https://tailwindcss.com/) for styling
+- [Vite](https://vitejs.dev/) for the build tooling

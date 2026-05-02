@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/components/ui/use-toast';
 import { ResumeInput } from '@/components/ResumeInput';
@@ -20,29 +20,7 @@ const Index = () => {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [isGeneratingImprovedResume, setIsGeneratingImprovedResume] = useState(false);
   const [improvedResume, setImprovedResume] = useState<string>('');
-  const [isInitialized, setIsInitialized] = useState(false);
   const { toast } = useToast();
-
-  useEffect(() => {
-    // Initialize Gemini service
-    const initService = async () => {
-      try {
-        await GeminiService.initialize();
-        setIsInitialized(true);
-      } catch (error) {
-        console.error('Failed to initialize Gemini service:', error);
-        toast({
-          title: "AI Unavailable",
-          description: "Falling back to local analysis. You can still analyze without AI.",
-          variant: "destructive",
-        });
-        // Allow usage with fallback
-        setIsInitialized(false);
-      }
-    };
-
-    initService();
-  }, [toast]);
 
   const tokenize = (text: string): string[] => {
     return text
@@ -126,14 +104,11 @@ const Index = () => {
     try {
       let result: any | null = null;
 
-      // Try AI first if initialized
-      if (GeminiService.isInitialized()) {
-        try {
-          result = await GeminiService.analyzeResume(resume, jobDescription);
-        } catch (error: any) {
-          console.warn('AI analysis failed, falling back to heuristic:', error);
-          // proceed to fallback
-        }
+      // Try AI via backend API
+      try {
+        result = await GeminiService.analyzeResume(resume, jobDescription);
+      } catch (error: any) {
+        console.warn('AI analysis failed, falling back to heuristic:', error);
       }
 
       // Fallback heuristic if AI is unavailable or failed
@@ -174,15 +149,6 @@ const Index = () => {
       return;
     }
 
-    if (!GeminiService.isInitialized()) {
-      toast({
-        title: "AI Not Available",
-        description: "Resume optimization requires AI. Please configure your API key.",
-        variant: "destructive",
-      });
-      return;
-    }
-
     setIsGeneratingImprovedResume(true);
     try {
       const improved = await GeminiService.generateImprovedResume(
@@ -207,10 +173,6 @@ const Index = () => {
       setIsGeneratingImprovedResume(false);
     }
   };
-
-  if (!isInitialized) {
-    // We still allow the app to render — local analysis will work.
-  }
 
   return (
     <div className="min-h-screen bg-background relative overflow-hidden selection:bg-primary/20">
@@ -275,7 +237,7 @@ const Index = () => {
             {analysis && (
               <Button
                 onClick={generateImprovedResume}
-                disabled={isGeneratingImprovedResume || !GeminiService.isInitialized()}
+                disabled={isGeneratingImprovedResume}
                 variant="outline"
                 size="lg"
                 className="border-2 border-primary/20 bg-background/50 backdrop-blur-sm text-foreground hover:bg-primary hover:text-primary-foreground hover:border-primary transition-all duration-300 shadow-sm hover:shadow-md hover:-translate-y-1 h-14 px-8 text-lg w-full sm:w-auto rounded-xl"
