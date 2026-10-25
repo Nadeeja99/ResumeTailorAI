@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { getErrorMessage } from '@/lib/utils';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -61,8 +62,8 @@ export const JobComparisonPanel = ({ resume }: JobComparisonPanelProps) => {
       const { results: data } = await compareJobs(resume, validJobs);
       setResults(data.sort((a, b) => b.matchScore - a.matchScore));
       toast({ title: 'Comparison Complete', description: `Compared against ${data.length} job${data.length > 1 ? 's' : ''}.` });
-    } catch (error: any) {
-      toast({ title: 'Comparison Failed', description: error.message, variant: 'destructive' });
+    } catch (error) {
+      toast({ title: 'Comparison Failed', description: getErrorMessage(error), variant: 'destructive' });
     } finally {
       setIsComparing(false);
     }

@@ -3,8 +3,16 @@ services:
     build: ./backend
     restart: unless-stopped
     environment:
-      - GEMINI_API_KEY=${GEMINI_API_KEY}
-      - PORT=3001
+      NODE_ENV: production
+      PORT: "3001"
+      DATABASE_PATH: /data/app.db
+      GEMINI_API_KEY: ${GEMINI_API_KEY:?Set GEMINI_API_KEY in .env}
+      # Billing is optional; routes return errors when these are blank
+      STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY:-}
+      STRIPE_PRO_PRICE_ID: ${STRIPE_PRO_PRICE_ID:-}
+      STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:-}
+    volumes:
+      - app-data:/data
     expose:
       - "3001"
 
@@ -15,3 +23,6 @@ services:
       - "8080:80"
     depends_on:
       - backend
+
+volumes:
+  app-data:

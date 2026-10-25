@@ -115,3 +115,5 @@ temp/
 
 # Local development
 .local/ 
+# Local SQLite data (mounted as a volume in Docker)
+data/

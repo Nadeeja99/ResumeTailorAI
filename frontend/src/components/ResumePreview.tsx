@@ -59,7 +59,7 @@ export const ResumePreview = ({ resume, isStreaming = false, suggestions = [] }:
           });
         }
 
-        const isBullet = /^[•\-\*]/.test(trimmed);
+        const isBullet = /^[•*-]/.test(trimmed);
         return new Paragraph({
           children: [new TextRun({ text: trimmed || ' ', size: 22 })],
           bullet: isBullet ? { level: 0 } : undefined,
@@ -97,7 +97,7 @@ export const ResumePreview = ({ resume, isStreaming = false, suggestions = [] }:
           </h3>
         );
       }
-      if (/^[•\-\*]/.test(line.trim())) {
+      if (/^[•*-]/.test(line.trim())) {
         return (
           <p key={index} className="ml-4 mb-1 text-sm text-foreground">
             {line.trim()}

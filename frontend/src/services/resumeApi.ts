@@ -1,15 +1,17 @@
 const API_BASE = '/api';
 
+async function readError(res: Response): Promise<Error> {
+  const err = (await res.json().catch(() => ({}))) as { error?: string };
+  return new Error(err.error || `Request failed (${res.status})`);
+}
+
 async function post<T>(path: string, body: unknown): Promise<T> {
   const res = await fetch(`${API_BASE}${path}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
   });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error((err as any).error || `Request failed (${res.status})`);
-  }
+  if (!res.ok) throw await readError(res);
   return res.json() as Promise<T>;
 }
 
@@ -26,10 +28,7 @@ async function streamSSE(
     body: JSON.stringify(body),
   });
 
-  if (!res.ok || !res.body) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error((err as any).error || `Request failed (${res.status})`);
-  }
+  if (!res.ok || !res.body) throw await readError(res);
 
   const reader = res.body.getReader();
   const decoder = new TextDecoder();
@@ -49,7 +48,7 @@ async function streamSSE(
       const payload = line.slice(6).trim();
       if (payload === '[DONE]') return full;
 
-      let parsed: any;
+      let parsed: { chunk?: string; error?: string };
       try {
         parsed = JSON.parse(payload);
       } catch {
@@ -184,13 +183,4 @@ export function generateInterviewPrep(
   jobDescription: string
 ): Promise<InterviewPrepResult> {
   return post('/interview-prep', { resume, jobDescription });
-}
-
-// Legacy class export so existing Index.tsx import still works
-export class GeminiService {
-  static isInitialized() { return true; }
-  static analyzeResume(resume: string, jd: string) { return analyzeResume(resume, jd); }
-  static generateImprovedResume(resume: string, jd: string, suggestions: string[], onChunk = (_c: string) => {}) {
-    return generateImprovedResume(resume, jd, suggestions, onChunk);
-  }
 }

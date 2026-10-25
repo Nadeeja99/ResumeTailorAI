@@ -5,7 +5,7 @@ import { fileURLToPath } from 'url';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const DB_PATH = process.env.NODE_ENV === 'test'
   ? ':memory:'
-  : path.join(__dirname, '../../../data/app.db');
+  : process.env.DATABASE_PATH ?? path.join(__dirname, '../../../data/app.db');
 
 // Ensure data directory exists for non-test environments
 if (process.env.NODE_ENV !== 'test') {

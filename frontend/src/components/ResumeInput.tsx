@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { getErrorMessage } from '@/lib/utils';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
@@ -24,7 +25,7 @@ async function extractPdfText(file: File): Promise<string> {
   for (let i = 1; i <= pdf.numPages; i++) {
     const page = await pdf.getPage(i);
     const content = await page.getTextContent();
-    fullText += content.items.map((item: any) => item.str).join(' ') + '\n';
+    fullText += content.items.map(item => ('str' in item ? item.str : '')).join(' ') + '\n';
   }
   return fullText.trim();
 }
@@ -71,8 +72,8 @@ export const ResumeInput = ({ resume, onResumeChange }: ResumeInputProps) => {
       }
       onResumeChange(text);
       toast({ title: 'File Uploaded', description: `Extracted text from ${file.name}` });
-    } catch (error: any) {
-      toast({ title: 'Upload Failed', description: error.message || 'Could not process file.', variant: 'destructive' });
+    } catch (error) {
+      toast({ title: 'Upload Failed', description: getErrorMessage(error, 'Could not process file.'), variant: 'destructive' });
     } finally {
       setIsProcessing(false);
     }
@@ -112,11 +113,11 @@ export const ResumeInput = ({ resume, onResumeChange }: ResumeInputProps) => {
       onResumeChange(cleanedResume);
       setLinkedInStep('done');
       toast({ title: 'LinkedIn Profile Imported', description: 'Your profile has been structured as a resume.' });
-    } catch (error: any) {
+    } catch (error) {
       setLinkedInStep('idle');
       toast({
         title: 'Import Failed',
-        description: error.message || 'Could not parse LinkedIn PDF.',
+        description: getErrorMessage(error, 'Could not parse LinkedIn PDF.'),
         variant: 'destructive',
       });
     }

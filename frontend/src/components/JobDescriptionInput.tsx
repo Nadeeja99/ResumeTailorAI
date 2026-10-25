@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { getErrorMessage } from '@/lib/utils';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
@@ -37,7 +38,7 @@ export const JobDescriptionInput = ({ jobDescription, onJobDescriptionChange }: 
       for (let i = 1; i <= pdf.numPages; i++) {
         const page = await pdf.getPage(i);
         const content = await page.getTextContent();
-        text += content.items.map((item: any) => item.str).join(' ') + '\n';
+        text += content.items.map(item => ('str' in item ? item.str : '')).join(' ') + '\n';
       }
       return text.trim();
     }
@@ -58,8 +59,8 @@ export const JobDescriptionInput = ({ jobDescription, onJobDescriptionChange }: 
       const text = await extractText(file);
       onJobDescriptionChange(text);
       toast({ title: 'File Uploaded', description: `Extracted text from ${file.name}` });
-    } catch (error: any) {
-      toast({ title: 'Upload Failed', description: error.message, variant: 'destructive' });
+    } catch (error) {
+      toast({ title: 'Upload Failed', description: getErrorMessage(error), variant: 'destructive' });
     } finally {
       setIsProcessing(false);
     }

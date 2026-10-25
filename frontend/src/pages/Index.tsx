@@ -15,6 +15,7 @@ import UsageBanner from '@/components/UsageBanner';
 import InterviewPrepPanel from '@/components/InterviewPrepPanel';
 import { analyzeResume, generateImprovedResume, type AnalysisResult } from '@/services/resumeApi';
 import { fetchUsageStatus, type UsageStatus } from '@/lib/userStore';
+import { getErrorMessage } from '@/lib/utils';
 import { Sparkles, Target, FileText, RefreshCw, GitCompare, BarChart2, BrainCircuit, MessageSquare } from 'lucide-react';
 
 const Index = () => {
@@ -100,8 +101,9 @@ const Index = () => {
       setAnalysis(result);
       refreshUsage();
       toast({ title: 'Analysis Complete', description: 'Your resume has been analyzed.' });
-    } catch (err: any) {
-      if (err.message?.includes('USAGE_LIMIT_REACHED') || err.message?.includes('Monthly limit reached')) {
+    } catch (err) {
+      const message = getErrorMessage(err, '');
+      if (message.includes('USAGE_LIMIT_REACHED') || message.includes('Monthly limit reached')) {
         setPricingOpen(true);
         setIsAnalyzing(false);
         return;
@@ -129,8 +131,8 @@ const Index = () => {
         setImprovedResume(prev => prev + chunk);
       });
       toast({ title: 'Resume Optimized', description: 'Your improved resume is ready to preview and download.' });
-    } catch (err: any) {
-      toast({ title: 'Generation Failed', description: err.message || 'Could not reach the AI service. Is the backend running?', variant: 'destructive' });
+    } catch (err) {
+      toast({ title: 'Generation Failed', description: getErrorMessage(err, 'Could not reach the AI service. Is the backend running?'), variant: 'destructive' });
     } finally {
       setIsGenerating(false);
     }

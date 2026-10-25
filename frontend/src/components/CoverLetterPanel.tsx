@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { getErrorMessage } from '@/lib/utils';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -37,10 +38,10 @@ export const CoverLetterPanel = ({ resume, jobDescription }: CoverLetterPanelPro
         setCoverLetter(prev => prev + chunk);
       });
       toast({ title: 'Cover Letter Ready', description: 'Preview and download below.' });
-    } catch (error: any) {
+    } catch (error) {
       toast({
         title: 'Generation Failed',
-        description: error.message || 'Could not reach the AI service. Is the backend running?',
+        description: getErrorMessage(error, 'Could not reach the AI service. Is the backend running?'),
         variant: 'destructive',
       });
     } finally {

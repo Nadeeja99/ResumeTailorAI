@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { getErrorMessage } from '@/lib/utils';
 import { generateInterviewPrep, type InterviewPrepResult, type InterviewQuestion } from '@/services/resumeApi';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/components/ui/use-toast';
@@ -135,8 +136,8 @@ export default function InterviewPrepPanel({ resume, jobDescription }: Props) {
         setVisibleCount(count);
         if (count >= data.questions.length) clearInterval(interval);
       }, 100);
-    } catch (err: any) {
-      toast({ title: 'Generation Failed', description: err.message || 'Could not generate questions.', variant: 'destructive' });
+    } catch (err) {
+      toast({ title: 'Generation Failed', description: getErrorMessage(err, 'Could not generate questions.'), variant: 'destructive' });
     } finally {
       setLoading(false);
     }
