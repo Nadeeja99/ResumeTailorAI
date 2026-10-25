@@ -1,4 +1,4 @@
-FROM node:24-alpine AS base
+FROM node:26-alpine AS base
 WORKDIR /app
 
 # Production dependencies only. better-sqlite3 is native, so keep a toolchain
