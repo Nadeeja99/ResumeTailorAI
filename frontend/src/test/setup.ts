@@ -19,6 +19,9 @@ Object.defineProperty(window, 'matchMedia', {
   }),
 });
 
+// jsdom doesn't implement layout/scrolling APIs
+Element.prototype.scrollIntoView ??= () => {};
+
 afterEach(() => {
   cleanup();
   vi.restoreAllMocks();

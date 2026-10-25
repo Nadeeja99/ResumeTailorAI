@@ -32,14 +32,30 @@ export interface AITelemetry {
   prompts?: string[];
 }
 
+/** Wire format of JSON AI endpoints. */
 export interface AIResponse<T> {
   data: T;
   telemetry: AITelemetry;
 }
 
-export interface StreamResult {
-  text: string;
+/** Latency as observed by the browser (includes network + proxy), complementing server telemetry. */
+export interface ClientTiming {
+  /** Response headers received. */
+  ttfbMs: number;
+  /** First streamed text chunk received (streams only). */
+  ttftMs: number | null;
+  totalMs: number;
+}
+
+/** What every client AI call resolves to — JSON and streaming alike. */
+export interface AIResult<T> {
+  data: T;
   telemetry: AITelemetry | null;
+  timing: ClientTiming;
+}
+
+export interface RequestOptions {
+  signal?: AbortSignal;
 }
 
 export type SSEEvent =

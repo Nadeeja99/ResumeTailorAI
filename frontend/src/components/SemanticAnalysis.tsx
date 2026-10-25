@@ -1,12 +1,14 @@
-import { useState } from 'react';
 import { BrainCircuit, Check, Loader2, X } from 'lucide-react';
-import { semanticAnalyze, SemanticAnalysisResult } from '../services/resumeApi';
+import { isUsageLimitError, semanticAnalyze, type SemanticAnalysisResult } from '@/services/resumeApi';
+import { RequestError } from '@/components/common/RequestError';
+import { Skeleton } from '@/components/ui/skeleton';
+import { useAITask } from '@/hooks/useAI';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
 import { SEMANTIC_THRESHOLDS, scoreLabel, scoreTone, TONE_BG, TONE_TEXT } from '@/lib/score';
-import { cn, getErrorMessage } from '@/lib/utils';
+import { cn } from '@/lib/utils';
 
 interface Props {
   resume: string;
@@ -64,30 +66,32 @@ function SectionScores({ sections }: { sections: SemanticAnalysisResult['section
   );
 }
 
+function SemanticSkeleton() {
+  return (
+    <div className="grid grid-cols-1 gap-6 lg:grid-cols-3" aria-busy="true" aria-label="Running semantic analysis">
+      <Card className="flex flex-col items-center justify-center gap-4 p-6">
+        <Skeleton className="h-28 w-28 rounded-full" />
+        <Skeleton className="h-4 w-32" />
+      </Card>
+      <Card className="space-y-5 p-6 lg:col-span-2">
+        {Array.from({ length: 3 }).map((_, i) => (
+          <div key={i} className="space-y-2">
+            <Skeleton className="h-4 w-1/3" />
+            <Skeleton className="h-2 w-full" />
+          </div>
+        ))}
+      </Card>
+    </div>
+  );
+}
+
 export default function SemanticAnalysis({ resume, jobDescription, onUpgradeClick }: Props) {
-  const [result, setResult] = useState<SemanticAnalysisResult | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const task = useAITask<SemanticAnalysisResult>();
+  const result = task.data;
 
   async function run() {
-    if (!resume.trim() || !jobDescription.trim()) {
-      setError('Paste your resume and job description first.');
-      return;
-    }
-    setLoading(true);
-    setError(null);
-    try {
-      setResult(await semanticAnalyze(resume, jobDescription));
-    } catch (e: unknown) {
-      const msg = getErrorMessage(e, 'Analysis failed.');
-      if (msg.includes('USAGE_LIMIT_REACHED') || msg.includes('Monthly limit reached')) {
-        onUpgradeClick();
-      } else {
-        setError(msg);
-      }
-    } finally {
-      setLoading(false);
-    }
+    const outcome = await task.run(signal => semanticAnalyze(resume, jobDescription, { signal }));
+    if (outcome.status === 'error' && isUsageLimitError(outcome.error)) onUpgradeClick();
   }
 
   return (
@@ -104,18 +108,20 @@ export default function SemanticAnalysis({ resume, jobDescription, onUpgradeClic
               keyword overlap.
             </CardDescription>
           </div>
-          <Button onClick={run} disabled={loading} className="shrink-0">
-            {loading && <Loader2 className="animate-spin" />}
-            {loading ? 'Analyzing…' : result ? 'Run again' : 'Run analysis'}
-          </Button>
+          {task.isPending ? (
+            <Button variant="outline" onClick={task.abort} className="shrink-0">
+              <Loader2 className="animate-spin" /> Cancel
+            </Button>
+          ) : (
+            <Button onClick={run} className="shrink-0">
+              {result ? 'Run again' : 'Run analysis'}
+            </Button>
+          )}
         </CardHeader>
       </Card>
 
-      {error && (
-        <div role="alert" className="rounded-md border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">
-          {error}
-        </div>
-      )}
+      {task.status === 'error' && task.error && <RequestError error={task.error} onRetry={run} />}
+      {task.isPending && <SemanticSkeleton />}
 
       {result && (
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">

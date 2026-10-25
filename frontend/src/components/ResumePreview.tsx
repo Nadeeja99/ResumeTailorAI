@@ -1,11 +1,10 @@
+import { useRef, useState } from 'react';
+import { Download, Eye, FileText, Loader2, RefreshCw } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Download, Eye, FileText, RefreshCw } from 'lucide-react';
 import { useToast } from '@/components/ui/use-toast';
-import jsPDF from 'jspdf';
-import html2canvas from 'html2canvas';
-import { Document, Paragraph, TextRun, HeadingLevel, Packer } from 'docx';
+import { classifyLine, exportElementToPdf, exportTextToDocx } from '@/lib/exportDocument';
 
 interface ResumePreviewProps {
   resume: string;
@@ -13,113 +12,46 @@ interface ResumePreviewProps {
   suggestions?: string[];
 }
 
+function ResumeLine({ line }: { line: string }) {
+  switch (classifyLine(line)) {
+    case 'heading':
+      return (
+        <h3 className="mb-2 mt-6 border-b border-zinc-200 pb-1 text-sm font-semibold uppercase tracking-wide text-zinc-900 first:mt-0">
+          {line.trim()}
+        </h3>
+      );
+    case 'bullet':
+      return <p className="mb-1 ml-4 text-sm text-zinc-800">{line.trim()}</p>;
+    case 'text':
+      return <p className="mb-2 text-sm leading-relaxed text-zinc-800">{line.trim()}</p>;
+    default:
+      return <div className="h-2" />;
+  }
+}
+
 export const ResumePreview = ({ resume, isStreaming = false, suggestions = [] }: ResumePreviewProps) => {
+  const paperRef = useRef<HTMLDivElement>(null);
+  const [exporting, setExporting] = useState<'pdf' | 'docx' | null>(null);
   const { toast } = useToast();
 
-  const downloadAsPDF = async () => {
+  async function download(kind: 'pdf' | 'docx') {
+    setExporting(kind);
     try {
-      const element = document.getElementById('resume-preview-content');
-      if (!element) return;
-      const canvas = await html2canvas(element, { scale: 2, useCORS: true, allowTaint: true });
-      const imgData = canvas.toDataURL('image/png');
-      const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
-      const imgWidth = 210;
-      const pageHeight = 295;
-      const imgHeight = (canvas.height * imgWidth) / canvas.width;
-      let heightLeft = imgHeight;
-      pdf.addImage(imgData, 'PNG', 0, 0, imgWidth, imgHeight);
-      heightLeft -= pageHeight;
-      while (heightLeft >= 0) {
-        pdf.addPage();
-        pdf.addImage(imgData, 'PNG', 0, heightLeft - imgHeight, imgWidth, imgHeight);
-        heightLeft -= pageHeight;
-      }
-      pdf.save('tailored-resume.pdf');
-      toast({ title: 'Downloaded', description: 'Resume saved as PDF.' });
+      if (kind === 'pdf' && paperRef.current) await exportElementToPdf(paperRef.current, 'tailored-resume.pdf');
+      if (kind === 'docx') await exportTextToDocx(resume, 'tailored-resume.docx', { structured: true });
+      toast({ title: 'Downloaded', description: `Resume saved as ${kind === 'pdf' ? 'PDF' : 'Word document'}.` });
     } catch {
-      toast({ title: 'Error', description: 'Failed to generate PDF.', variant: 'destructive' });
+      toast({ title: 'Export failed', description: 'Could not create the file. Please try again.', variant: 'destructive' });
+    } finally {
+      setExporting(null);
     }
-  };
-
-  const downloadAsWord = async () => {
-    try {
-      const lines = resume.split('\n');
-      const children: Paragraph[] = lines.map(line => {
-        const trimmed = line.trim();
-        const isHeading =
-          trimmed.length > 0 &&
-          (trimmed === trimmed.toUpperCase() ||
-            /^(EXPERIENCE|EDUCATION|SKILLS|CONTACT|SUMMARY|OBJECTIVE|PROJECTS|CERTIFICATIONS)/i.test(trimmed));
-
-        if (isHeading && trimmed.length > 0) {
-          return new Paragraph({
-            text: trimmed,
-            heading: HeadingLevel.HEADING_2,
-            spacing: { before: 240, after: 120 },
-          });
-        }
-
-        const isBullet = /^[•*-]/.test(trimmed);
-        return new Paragraph({
-          children: [new TextRun({ text: trimmed || ' ', size: 22 })],
-          bullet: isBullet ? { level: 0 } : undefined,
-          spacing: { after: 80 },
-        });
-      });
-
-      const doc = new Document({
-        sections: [{ properties: {}, children }],
-      });
-
-      const blob = await Packer.toBlob(doc);
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = 'tailored-resume.docx';
-      a.click();
-      URL.revokeObjectURL(url);
-      toast({ title: 'Downloaded', description: 'Resume saved as Word document.' });
-    } catch {
-      toast({ title: 'Error', description: 'Failed to generate Word document.', variant: 'destructive' });
-    }
-  };
-
-  const formatResumeText = (text: string) => {
-    return text.split('\n').map((line, index) => {
-      if (
-        line.trim().length > 0 &&
-        (line === line.toUpperCase() ||
-          /^(EXPERIENCE|EDUCATION|SKILLS|CONTACT|SUMMARY|OBJECTIVE|PROJECTS|CERTIFICATIONS)/i.test(line.trim()))
-      ) {
-        return (
-          <h3 key={index} className="mb-2 mt-6 border-b border-zinc-200 pb-1 text-sm font-semibold uppercase tracking-wide text-zinc-900 first:mt-0">
-            {line.trim()}
-          </h3>
-        );
-      }
-      if (/^[•*-]/.test(line.trim())) {
-        return (
-          <p key={index} className="mb-1 ml-4 text-sm text-zinc-800">
-            {line.trim()}
-          </p>
-        );
-      }
-      if (line.trim().length > 0) {
-        return (
-          <p key={index} className="mb-2 text-sm leading-relaxed text-zinc-800">
-            {line.trim()}
-          </p>
-        );
-      }
-      return <div key={index} className="h-2" />;
-    });
-  };
+  }
 
   return (
     <div className="space-y-6">
       <Card>
         <CardHeader>
-          <div className="flex items-center justify-between flex-wrap gap-2">
+          <div className="flex flex-wrap items-center justify-between gap-2">
             <CardTitle className="flex items-center gap-2">
               <Eye className="h-4 w-4 text-muted-foreground" aria-hidden />
               Resume preview
@@ -131,37 +63,36 @@ export const ResumePreview = ({ resume, isStreaming = false, suggestions = [] }:
             </CardTitle>
             {!isStreaming && (
               <div className="flex gap-2">
-                <Button onClick={downloadAsPDF} variant="outline" size="sm" disabled={!resume.trim()}>
-                  <Download /> PDF
+                <Button onClick={() => download('pdf')} variant="outline" size="sm" disabled={!resume.trim() || !!exporting}>
+                  {exporting === 'pdf' ? <Loader2 className="animate-spin" /> : <Download />} PDF
                 </Button>
-                <Button onClick={downloadAsWord} size="sm" disabled={!resume.trim()}>
-                  <FileText /> Word
+                <Button onClick={() => download('docx')} size="sm" disabled={!resume.trim() || !!exporting}>
+                  {exporting === 'docx' ? <Loader2 className="animate-spin" /> : <FileText />} Word
                 </Button>
               </div>
             )}
           </div>
         </CardHeader>
         <CardContent>
+          {/* Paper keeps print colors in both themes so it matches the exported PDF */}
           <div
-            id="resume-preview-content"
+            ref={paperRef}
+            aria-live={isStreaming ? 'polite' : undefined}
+            aria-busy={isStreaming}
             className="min-h-[600px] rounded-md bg-white p-8 text-zinc-900 shadow-sm ring-1 ring-black/5 sm:p-10"
             style={{ fontFamily: 'Arial, sans-serif' }}
           >
             {resume ? (
               <div className="space-y-1">
-                {formatResumeText(resume)}
-                {isStreaming && (
-                  <span className="ml-0.5 inline-block h-4 w-0.5 animate-pulse bg-zinc-900 align-middle" />
-                )}
-              </div>
-            ) : isStreaming ? (
-              <div className="flex items-center justify-center h-64 text-zinc-400 gap-2">
-                <RefreshCw className="w-4 h-4 animate-spin" />
-                <p>Generating optimized resume...</p>
+                {resume.split('\n').map((line, i) => (
+                  <ResumeLine key={i} line={line} />
+                ))}
+                {isStreaming && <span className="ml-0.5 inline-block h-4 w-0.5 animate-pulse bg-zinc-900 align-middle" />}
               </div>
             ) : (
-              <div className="flex items-center justify-center h-64 text-zinc-400">
-                <p>Resume content will appear here...</p>
+              <div className="flex h-64 items-center justify-center gap-2 text-zinc-400">
+                {isStreaming && <RefreshCw className="h-4 w-4 animate-spin" aria-hidden />}
+                <p>{isStreaming ? 'Writing your tailored resume…' : 'Resume content will appear here.'}</p>
               </div>
             )}
           </div>

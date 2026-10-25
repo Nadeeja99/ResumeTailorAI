@@ -2,13 +2,14 @@ import type { ReactNode } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
+import { Skeleton } from '@/components/ui/skeleton';
 import { scoreLabel, scoreTone, TONE_BG, TONE_TEXT } from '@/lib/score';
 import { cn } from '@/lib/utils';
 import type { AnalysisResult } from '@/services/resumeApi';
 import { AlertCircle, CheckCircle2, Lightbulb, Target } from 'lucide-react';
 
 interface AnalysisResultsProps {
-  analysis: AnalysisResult;
+  analysis: AnalysisResult | null;
   isLoading: boolean;
 }
 
@@ -43,13 +44,13 @@ function SubScore({ title, score, children }: { title: string; score: number; ch
 }
 
 export const AnalysisResults = ({ analysis, isLoading }: AnalysisResultsProps) => {
-  if (isLoading) {
+  if (isLoading || !analysis) {
     return (
       <Card>
-        <CardContent className="space-y-4 p-6">
-          <div className="h-4 w-40 animate-pulse rounded bg-muted" />
-          <div className="h-8 w-24 animate-pulse rounded bg-muted" />
-          <div className="h-2 animate-pulse rounded bg-muted" />
+        <CardContent className="space-y-4 p-6" aria-busy="true" aria-label="Analyzing resume">
+          <Skeleton className="h-4 w-32" />
+          <Skeleton className="h-10 w-24" />
+          <Skeleton className="h-2 w-full" />
         </CardContent>
       </Card>
     );

@@ -1,15 +1,17 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Progress } from '@/components/ui/progress';
 import { Button } from '@/components/ui/button';
-import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
-import { Badge } from '@/components/ui/badge';
-import { useToast } from '@/components/ui/use-toast';
-import { compareJobs, JobComparisonResult } from '@/services/resumeApi';
-import { COMPARISON_THRESHOLDS, scoreTone, TONE_BG, TONE_TEXT } from '@/lib/score';
-import { cn, getErrorMessage } from '@/lib/utils';
-import { Plus, Trash2, BarChart2, RefreshCw, Trophy } from 'lucide-react';
+import { Skeleton } from '@/components/ui/skeleton';
+import { Kbd } from '@/components/common/Kbd';
+import { RequestError } from '@/components/common/RequestError';
+import { LimitedTextarea } from '@/components/inputs/LimitedTextarea';
+import { useAITask } from '@/hooks/useAI';
+import { SUBMIT_SHORTCUT_LABEL, useSubmitShortcut } from '@/hooks/useSubmitShortcut';
+import { compareJobs, type JobComparisonResult } from '@/services/resumeApi';
+import { isValidLength, LIMITS } from '@/lib/limits';
+import { ComparisonResultCard } from '@/components/compare/ComparisonResultCard';
+import { Plus, Trash2, BarChart2, Loader2 } from 'lucide-react';
 
 interface JobEntry {
   id: string;
@@ -21,64 +23,41 @@ interface JobComparisonPanelProps {
   resume: string;
 }
 
+const newJob = (): JobEntry => ({ id: crypto.randomUUID(), title: '', description: '' });
+
 export const JobComparisonPanel = ({ resume }: JobComparisonPanelProps) => {
-  const [jobs, setJobs] = useState<JobEntry[]>([
-    { id: crypto.randomUUID(), title: '', description: '' },
-  ]);
-  const [results, setResults] = useState<JobComparisonResult[]>([]);
-  const [isComparing, setIsComparing] = useState(false);
-  const { toast } = useToast();
+  const [jobs, setJobs] = useState<JobEntry[]>(() => [newJob()]);
+  const task = useAITask<{ results: JobComparisonResult[] }>();
 
-  const addJob = () => {
-    if (jobs.length >= 5) {
-      toast({ title: 'Limit reached', description: 'Maximum 5 job descriptions for comparison.' });
-      return;
-    }
-    setJobs(prev => [...prev, { id: crypto.randomUUID(), title: '', description: '' }]);
+  const results = useMemo(
+    () => [...(task.data?.results ?? [])].sort((a, b) => b.matchScore - a.matchScore),
+    [task.data]
+  );
+  const validJobs = jobs.filter(j => isValidLength(j.description, LIMITS.jobDescription));
+  const hasInvalidJob = jobs.some(j => j.description.trim() && !isValidLength(j.description, LIMITS.jobDescription));
+  const canCompare = validJobs.length > 0 && !hasInvalidJob && !task.isPending;
+
+  const removeJob = (id: string) => setJobs(prev => (prev.length === 1 ? prev : prev.filter(j => j.id !== id)));
+  const updateJob = (id: string, field: 'title' | 'description', value: string) =>
+    setJobs(prev => prev.map(j => (j.id === id ? { ...j, [field]: value } : j)));
+
+  const compare = () => {
+    if (!canCompare) return;
+    void task.run(signal => compareJobs(resume, validJobs, { signal }));
   };
-
-  const removeJob = (id: string) => {
-    if (jobs.length === 1) return;
-    setJobs(prev => prev.filter(j => j.id !== id));
-  };
-
-  const updateJob = (id: string, field: 'title' | 'description', value: string) => {
-    setJobs(prev => prev.map(j => j.id === id ? { ...j, [field]: value } : j));
-  };
-
-  const compare = async () => {
-    if (!resume.trim()) {
-      toast({ title: 'No Resume', description: 'Please add your resume on the main tab first.', variant: 'destructive' });
-      return;
-    }
-    const validJobs = jobs.filter(j => j.description.trim().length >= 20);
-    if (validJobs.length === 0) {
-      toast({ title: 'No Job Descriptions', description: 'Add at least one job description (20+ characters).', variant: 'destructive' });
-      return;
-    }
-
-    setIsComparing(true);
-    setResults([]);
-    try {
-      const { results: data } = await compareJobs(resume, validJobs);
-      setResults(data.sort((a, b) => b.matchScore - a.matchScore));
-      toast({ title: 'Comparison Complete', description: `Compared against ${data.length} job${data.length > 1 ? 's' : ''}.` });
-    } catch (error) {
-      toast({ title: 'Comparison Failed', description: getErrorMessage(error), variant: 'destructive' });
-    } finally {
-      setIsComparing(false);
-    }
-  };
+  const onKeyDown = useSubmitShortcut(compare);
 
   return (
     <div className="space-y-6">
-      <Card>
+      <Card onKeyDown={onKeyDown}>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <BarChart2 className="h-4 w-4 text-muted-foreground" aria-hidden />
             Compare jobs
           </CardTitle>
-          <CardDescription>Add up to 5 job descriptions to see which role fits your resume best.</CardDescription>
+          <CardDescription>
+            Add up to {LIMITS.maxJobs} job descriptions to see which role fits your resume best.
+          </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           {jobs.map((job, idx) => (
@@ -99,29 +78,61 @@ export const JobComparisonPanel = ({ resume }: JobComparisonPanelProps) => {
               </div>
               <Input
                 value={job.title}
+                maxLength={LIMITS.jobTitle.max}
+                aria-label={`Job ${idx + 1} title`}
                 onChange={e => updateJob(job.id, 'title', e.target.value)}
                 placeholder="Job title (e.g. Senior Frontend Engineer)"
               />
-              <Textarea
+              <LimitedTextarea
+                id={`job-${job.id}`}
+                label={`Job ${idx + 1} description`}
                 value={job.description}
-                onChange={e => updateJob(job.id, 'description', e.target.value)}
+                onChange={value => updateJob(job.id, 'description', value)}
+                rule={LIMITS.jobDescription}
                 placeholder="Paste the job description…"
-                className="min-h-[150px] resize-y leading-relaxed"
+                className="min-h-[150px]"
               />
             </div>
           ))}
 
           <div className="flex flex-col gap-3 sm:flex-row">
-            <Button variant="outline" onClick={addJob} disabled={jobs.length >= 5}>
+            <Button
+              variant="outline"
+              onClick={() => setJobs(prev => [...prev, newJob()])}
+              disabled={jobs.length >= LIMITS.maxJobs}
+            >
               <Plus /> Add job
             </Button>
-            <Button onClick={compare} disabled={isComparing || !resume.trim()} className="sm:ml-auto">
-              {isComparing ? <RefreshCw className="animate-spin" /> : <BarChart2 />}
-              {isComparing ? 'Comparing…' : 'Compare'}
-            </Button>
+            {task.isPending ? (
+              <Button variant="outline" onClick={task.abort} className="sm:ml-auto">
+                <Loader2 className="animate-spin" /> Cancel
+              </Button>
+            ) : (
+              <Button onClick={compare} disabled={!canCompare} className="sm:ml-auto">
+                <BarChart2 /> Compare {validJobs.length > 1 ? `${validJobs.length} jobs` : ''}
+                <Kbd className="ml-1 hidden border-primary-foreground/30 bg-transparent text-primary-foreground/80 sm:inline-flex">
+                  {SUBMIT_SHORTCUT_LABEL}
+                </Kbd>
+              </Button>
+            )}
           </div>
+          {task.status === 'error' && task.error && <RequestError error={task.error} onRetry={compare} />}
         </CardContent>
       </Card>
+
+      {task.isPending && (
+        <Card className="space-y-4 p-6" aria-busy="true" aria-label="Comparing jobs">
+          {validJobs.map(job => (
+            <div key={job.id} className="space-y-3 rounded-md border p-5">
+              <div className="flex justify-between">
+                <Skeleton className="h-5 w-48" />
+                <Skeleton className="h-7 w-14" />
+              </div>
+              <Skeleton className="h-2 w-full" />
+            </div>
+          ))}
+        </Card>
+      )}
 
       {results.length > 0 && (
         <Card>
@@ -130,55 +141,9 @@ export const JobComparisonPanel = ({ resume }: JobComparisonPanelProps) => {
             <CardDescription>Sorted by match score, best first.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            {results.map((r, idx) => {
-              const tone = scoreTone(r.matchScore, COMPARISON_THRESHOLDS);
-              return (
-                <div key={r.id} className="space-y-4 rounded-md border p-5">
-                  <div className="flex items-start justify-between gap-4">
-                    <div className="min-w-0 space-y-1">
-                      {idx === 0 && (
-                        <Badge variant="success">
-                          <Trophy className="h-3 w-3" aria-hidden /> Best match
-                        </Badge>
-                      )}
-                      <p className="truncate font-medium">{r.title || `Job ${idx + 1}`}</p>
-                    </div>
-                    <span className={cn('text-2xl font-semibold tabular-nums', TONE_TEXT[tone])}>{r.matchScore}%</span>
-                  </div>
-
-                  <Progress value={r.matchScore} indicatorClassName={TONE_BG[tone]} />
-
-                  {r.strengths?.length > 0 && (
-                    <div>
-                      <p className="mb-1.5 text-xs font-medium text-muted-foreground">Strengths</p>
-                      <div className="flex flex-wrap gap-1.5">
-                        {r.strengths.map((s, i) => (
-                          <Badge key={i} variant="secondary" className="font-normal">{s}</Badge>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  {r.missingKeywords?.length > 0 && (
-                    <div>
-                      <p className="mb-1.5 text-xs font-medium text-muted-foreground">Missing keywords</p>
-                      <div className="flex flex-wrap gap-1.5">
-                        {r.missingKeywords.slice(0, 6).map((k, i) => (
-                          <Badge key={i} variant="outline" className="font-normal">{k}</Badge>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  {r.topSuggestion && (
-                    <p className="rounded-md bg-muted/60 px-3 py-2 text-sm text-muted-foreground">
-                      <span className="font-medium text-foreground">Top suggestion: </span>
-                      {r.topSuggestion}
-                    </p>
-                  )}
-                </div>
-              );
-            })}
+            {results.map((r, idx) => (
+              <ComparisonResultCard key={r.id} result={r} rank={idx} />
+            ))}
           </CardContent>
         </Card>
       )}

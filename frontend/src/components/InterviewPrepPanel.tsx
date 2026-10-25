@@ -1,12 +1,14 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Lightbulb, Loader2, MessageSquare } from 'lucide-react';
-import { cn, getErrorMessage } from '@/lib/utils';
+import { cn } from '@/lib/utils';
 import { generateInterviewPrep, type InterviewPrepResult } from '@/services/resumeApi';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { useToast } from '@/components/ui/use-toast';
+import { Skeleton } from '@/components/ui/skeleton';
+import { RequestError } from '@/components/common/RequestError';
 import { QuestionCard } from '@/components/interview/QuestionCard';
+import { useAITask } from '@/hooks/useAI';
 import { DIFFICULTY_TONE } from '@/lib/score';
 
 interface Props {
@@ -19,32 +21,28 @@ const CATEGORIES = [ALL, 'Behavioral', 'Technical', 'Situational', 'Culture Fit'
 const DIFFICULTIES = ['Easy', 'Medium', 'Hard'] as const;
 
 export default function InterviewPrepPanel({ resume, jobDescription }: Props) {
-  const [result, setResult] = useState<InterviewPrepResult | null>(null);
-  const [loading, setLoading] = useState(false);
+  const task = useAITask<InterviewPrepResult>();
   const [visibleCount, setVisibleCount] = useState(0);
   const [activeFilter, setActiveFilter] = useState(ALL);
-  const { toast } = useToast();
+  const result = task.data;
+  const loading = task.isPending;
 
-  async function generate() {
-    setLoading(true);
-    setResult(null);
+  // Reveal cards one by one; restarts for each new result and stops on unmount
+  useEffect(() => {
     setVisibleCount(0);
+    if (!result) return;
+    const interval = setInterval(() => {
+      setVisibleCount(count => {
+        if (count + 1 >= result.questions.length) clearInterval(interval);
+        return count + 1;
+      });
+    }, 100);
+    return () => clearInterval(interval);
+  }, [result]);
+
+  function generate() {
     setActiveFilter(ALL);
-    try {
-      const data = await generateInterviewPrep(resume, jobDescription);
-      setResult(data);
-      // Reveal cards one by one with staggered timing
-      let count = 0;
-      const interval = setInterval(() => {
-        count++;
-        setVisibleCount(count);
-        if (count >= data.questions.length) clearInterval(interval);
-      }, 100);
-    } catch (err) {
-      toast({ title: 'Generation Failed', description: getErrorMessage(err, 'Could not generate questions.'), variant: 'destructive' });
-    } finally {
-      setLoading(false);
-    }
+    void task.run(signal => generateInterviewPrep(resume, jobDescription, { signal }));
   }
 
   const filtered = result
@@ -67,21 +65,28 @@ export default function InterviewPrepPanel({ resume, jobDescription }: Props) {
             </CardDescription>
             {result && <p className="text-sm font-medium">Role: {result.roleTitle}</p>}
           </div>
-          <Button onClick={generate} disabled={loading} className="shrink-0">
-            {loading && <Loader2 className="animate-spin" />}
-            {loading ? 'Generating…' : result ? 'Regenerate' : 'Generate questions'}
-          </Button>
+          {loading ? (
+            <Button variant="outline" onClick={task.abort} className="shrink-0">
+              <Loader2 className="animate-spin" /> Cancel
+            </Button>
+          ) : (
+            <Button onClick={generate} className="shrink-0">
+              {result ? 'Regenerate' : 'Generate questions'}
+            </Button>
+          )}
         </CardHeader>
       </Card>
+
+      {task.status === 'error' && task.error && <RequestError error={task.error} onRetry={generate} />}
 
       {loading && (
         <div className="space-y-3" aria-busy="true" aria-label="Generating questions">
           {Array.from({ length: 4 }).map((_, i) => (
-            <div key={i} className="flex animate-pulse items-start gap-4 rounded-lg border bg-card p-5">
-              <div className="h-7 w-7 shrink-0 rounded-full bg-muted" />
+            <div key={i} className="flex items-start gap-4 rounded-lg border bg-card p-5">
+              <Skeleton className="h-7 w-7 shrink-0 rounded-full" />
               <div className="flex-1 space-y-2">
-                <div className="h-4 w-3/4 rounded bg-muted" />
-                <div className="h-3 w-1/2 rounded bg-muted" />
+                <Skeleton className="h-4 w-3/4" />
+                <Skeleton className="h-3 w-1/2" />
               </div>
             </div>
           ))}
