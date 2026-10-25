@@ -92,21 +92,21 @@ export const ResumePreview = ({ resume, isStreaming = false, suggestions = [] }:
           /^(EXPERIENCE|EDUCATION|SKILLS|CONTACT|SUMMARY|OBJECTIVE|PROJECTS|CERTIFICATIONS)/i.test(line.trim()))
       ) {
         return (
-          <h3 key={index} className="font-bold text-lg text-primary mt-6 mb-2 first:mt-0">
+          <h3 key={index} className="mb-2 mt-6 border-b border-zinc-200 pb-1 text-sm font-semibold uppercase tracking-wide text-zinc-900 first:mt-0">
             {line.trim()}
           </h3>
         );
       }
       if (/^[•*-]/.test(line.trim())) {
         return (
-          <p key={index} className="ml-4 mb-1 text-sm text-foreground">
+          <p key={index} className="mb-1 ml-4 text-sm text-zinc-800">
             {line.trim()}
           </p>
         );
       }
       if (line.trim().length > 0) {
         return (
-          <p key={index} className="mb-2 text-sm text-foreground leading-relaxed">
+          <p key={index} className="mb-2 text-sm leading-relaxed text-zinc-800">
             {line.trim()}
           </p>
         );
@@ -117,28 +117,25 @@ export const ResumePreview = ({ resume, isStreaming = false, suggestions = [] }:
 
   return (
     <div className="space-y-6">
-      <Card className="bg-gradient-card shadow-md border-0">
+      <Card>
         <CardHeader>
           <div className="flex items-center justify-between flex-wrap gap-2">
             <CardTitle className="flex items-center gap-2">
-              <Eye className="w-5 h-5 text-primary" />
-              {isStreaming ? (
-                <span className="flex items-center gap-2">
-                  Resume Preview
-                  <span className="flex items-center gap-1.5 text-sm font-normal text-primary bg-primary/10 px-2 py-0.5 rounded-full">
-                    <RefreshCw className="w-3 h-3 animate-spin" /> Writing...
-                  </span>
+              <Eye className="h-4 w-4 text-muted-foreground" aria-hidden />
+              Resume preview
+              {isStreaming && (
+                <span className="inline-flex items-center gap-1.5 rounded-md bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary">
+                  <RefreshCw className="h-3 w-3 animate-spin" aria-hidden /> Writing…
                 </span>
-              ) : 'Resume Preview'}
+              )}
             </CardTitle>
             {!isStreaming && (
               <div className="flex gap-2">
                 <Button onClick={downloadAsPDF} variant="outline" size="sm" disabled={!resume.trim()}>
-                  <Download className="w-4 h-4 mr-2" /> PDF
+                  <Download /> PDF
                 </Button>
-                <Button onClick={downloadAsWord} size="sm" disabled={!resume.trim()}
-                  className="bg-primary hover:bg-primary/90 text-primary-foreground">
-                  <FileText className="w-4 h-4 mr-2" /> Word
+                <Button onClick={downloadAsWord} size="sm" disabled={!resume.trim()}>
+                  <FileText /> Word
                 </Button>
               </div>
             )}
@@ -147,23 +144,23 @@ export const ResumePreview = ({ resume, isStreaming = false, suggestions = [] }:
         <CardContent>
           <div
             id="resume-preview-content"
-            className="bg-white p-8 rounded-lg shadow-sm min-h-[600px] text-black"
+            className="min-h-[600px] rounded-md bg-white p-8 text-zinc-900 shadow-sm ring-1 ring-black/5 sm:p-10"
             style={{ fontFamily: 'Arial, sans-serif' }}
           >
             {resume ? (
               <div className="space-y-1">
                 {formatResumeText(resume)}
                 {isStreaming && (
-                  <span className="inline-block w-0.5 h-4 bg-primary animate-pulse ml-0.5 align-middle" />
+                  <span className="ml-0.5 inline-block h-4 w-0.5 animate-pulse bg-zinc-900 align-middle" />
                 )}
               </div>
             ) : isStreaming ? (
-              <div className="flex items-center justify-center h-64 text-gray-400 gap-2">
+              <div className="flex items-center justify-center h-64 text-zinc-400 gap-2">
                 <RefreshCw className="w-4 h-4 animate-spin" />
                 <p>Generating optimized resume...</p>
               </div>
             ) : (
-              <div className="flex items-center justify-center h-64 text-gray-400">
+              <div className="flex items-center justify-center h-64 text-zinc-400">
                 <p>Resume content will appear here...</p>
               </div>
             )}
@@ -172,14 +169,14 @@ export const ResumePreview = ({ resume, isStreaming = false, suggestions = [] }:
       </Card>
 
       {suggestions.length > 0 && (
-        <Card className="bg-gradient-card shadow-md border-0">
+        <Card>
           <CardHeader>
-            <CardTitle className="text-lg">Applied Improvements</CardTitle>
+            <CardTitle>Applied improvements</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="space-y-2">
+            <div className="flex flex-wrap gap-2">
               {suggestions.map((s, i) => (
-                <Badge key={i} variant="secondary" className="mr-2 mb-2">{s}</Badge>
+                <Badge key={i} variant="secondary" className="font-normal">{s}</Badge>
               ))}
             </div>
           </CardContent>

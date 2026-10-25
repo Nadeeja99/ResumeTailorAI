@@ -17,6 +17,22 @@
     <meta name="twitter:title" content="ResumeTailorAI - AI-Powered Resume Optimization" />
     <meta name="twitter:description" content="AI-powered resume optimization tool that analyzes job descriptions and tailors your resume for maximum ATS compatibility and recruiter impact." />
     <meta name="twitter:image" content="/favicon.svg" />
+
+    <meta name="color-scheme" content="light dark" />
+    <meta name="theme-color" content="#fafafa" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#09090b" media="(prefers-color-scheme: dark)" />
+
+    <!-- Apply the saved theme before first paint to avoid a light/dark flash.
+         Keep the storage key in sync with THEME_STORAGE_KEY in src/components/theme/ThemeProvider.tsx. -->
+    <script>
+      (function () {
+        try {
+          var stored = localStorage.getItem('rt-theme');
+          var dark = stored === 'dark' || ((!stored || stored === 'system') && matchMedia('(prefers-color-scheme: dark)').matches);
+          document.documentElement.classList.toggle('dark', dark);
+        } catch (e) {}
+      })();
+    </script>
   </head>
 
   <body>

@@ -80,21 +80,21 @@ export const JobDescriptionInput = ({ jobDescription, onJobDescriptionChange }: 
   };
 
   return (
-    <Card className="bg-gradient-card shadow-md border-0">
+    <Card>
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
-          <Briefcase className="w-5 h-5 text-accent" />
-          Job Description
+          <Briefcase className="h-4 w-4 text-muted-foreground" aria-hidden />
+          Job description
         </CardTitle>
       </CardHeader>
       <CardContent>
         <Tabs defaultValue="paste" className="w-full">
           <TabsList className="grid w-full grid-cols-2">
             <TabsTrigger value="paste" className="flex items-center gap-2">
-              <Edit className="w-4 h-4" /> Paste Text
+              <Edit className="w-4 h-4" /> Paste
             </TabsTrigger>
             <TabsTrigger value="upload" className="flex items-center gap-2">
-              <Upload className="w-4 h-4" /> Upload File
+              <Upload className="w-4 h-4" /> Upload
             </TabsTrigger>
           </TabsList>
 
@@ -103,21 +103,21 @@ export const JobDescriptionInput = ({ jobDescription, onJobDescriptionChange }: 
               value={jobDescription}
               onChange={e => onJobDescriptionChange(e.target.value)}
               placeholder="Paste the job description you're applying for..."
-              className="min-h-[300px] resize-none"
+              className="min-h-[240px] resize-y sm:min-h-[320px] leading-relaxed"
             />
           </TabsContent>
 
           <TabsContent value="upload" className="space-y-4">
             <div
-              className={`border-2 border-dashed rounded-lg p-8 text-center transition-all ${
-                dragActive ? 'border-accent bg-accent/5' : isProcessing ? 'border-muted-foreground bg-muted/20' : 'border-border hover:border-accent/50'
+              className={`rounded-lg border border-dashed p-8 text-center transition-all ${
+                dragActive ? 'border-primary bg-primary/5' : isProcessing ? 'border-muted-foreground bg-muted/40' : 'hover:border-primary/50'
               }`}
               onDragEnter={handleDrag}
               onDragLeave={handleDrag}
               onDragOver={handleDrag}
               onDrop={handleDrop}
             >
-              <Upload className={`w-12 h-12 mx-auto mb-4 ${isProcessing ? 'animate-pulse text-accent' : 'text-muted-foreground'}`} />
+              <Upload className={`mx-auto mb-3 h-8 w-8 ${isProcessing ? 'animate-pulse text-primary' : 'text-muted-foreground'}`} />
               <p className="text-sm text-muted-foreground mb-4">
                 {isProcessing ? 'Processing file...' : 'Drag and drop the job description file, or click to select'}
               </p>
@@ -140,7 +140,7 @@ export const JobDescriptionInput = ({ jobDescription, onJobDescriptionChange }: 
               <Textarea
                 value={jobDescription}
                 onChange={e => onJobDescriptionChange(e.target.value)}
-                className="min-h-[200px] resize-none"
+                className="min-h-[200px] resize-y leading-relaxed"
                 disabled={isProcessing}
               />
             )}

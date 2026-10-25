@@ -1,14 +1,15 @@
 import { useState } from 'react';
-import { getErrorMessage } from '@/lib/utils';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Progress } from '@/components/ui/progress';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
-import { Progress } from '@/components/ui/progress';
 import { useToast } from '@/components/ui/use-toast';
 import { compareJobs, JobComparisonResult } from '@/services/resumeApi';
-import { Plus, Trash2, BarChart2, RefreshCw, TrendingUp } from 'lucide-react';
+import { COMPARISON_THRESHOLDS, scoreTone, TONE_BG, TONE_TEXT } from '@/lib/score';
+import { cn, getErrorMessage } from '@/lib/utils';
+import { Plus, Trash2, BarChart2, RefreshCw, Trophy } from 'lucide-react';
 
 interface JobEntry {
   id: string;
@@ -69,32 +70,30 @@ export const JobComparisonPanel = ({ resume }: JobComparisonPanelProps) => {
     }
   };
 
-  const scoreColor = (score: number) =>
-    score >= 75 ? 'text-green-600' : score >= 50 ? 'text-yellow-600' : 'text-red-600';
-
-  const scoreBarColor = (score: number) =>
-    score >= 75 ? 'bg-green-500' : score >= 50 ? 'bg-yellow-500' : 'bg-red-500';
-
   return (
     <div className="space-y-6">
-      <Card className="bg-gradient-card shadow-md border-0">
+      <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <BarChart2 className="w-5 h-5 text-primary" />
-            Compare Multiple Jobs
+            <BarChart2 className="h-4 w-4 text-muted-foreground" aria-hidden />
+            Compare jobs
           </CardTitle>
-          <p className="text-sm text-muted-foreground">
-            Add up to 5 job descriptions to see which role fits your resume best.
-          </p>
+          <CardDescription>Add up to 5 job descriptions to see which role fits your resume best.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           {jobs.map((job, idx) => (
-            <div key={job.id} className="border border-border/50 rounded-xl p-4 space-y-3">
+            <div key={job.id} className="space-y-3 rounded-md border p-4">
               <div className="flex items-center justify-between">
-                <span className="text-sm font-semibold text-muted-foreground">Job {idx + 1}</span>
+                <span className="text-sm font-medium text-muted-foreground">Job {idx + 1}</span>
                 {jobs.length > 1 && (
-                  <Button variant="ghost" size="sm" onClick={() => removeJob(job.id)} className="text-destructive hover:text-destructive">
-                    <Trash2 className="w-4 h-4" />
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => removeJob(job.id)}
+                    aria-label={`Remove job ${idx + 1}`}
+                    className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                  >
+                    <Trash2 />
                   </Button>
                 )}
               </div>
@@ -106,91 +105,80 @@ export const JobComparisonPanel = ({ resume }: JobComparisonPanelProps) => {
               <Textarea
                 value={job.description}
                 onChange={e => updateJob(job.id, 'description', e.target.value)}
-                placeholder="Paste the job description..."
-                className="min-h-[150px] resize-none"
+                placeholder="Paste the job description…"
+                className="min-h-[150px] resize-y leading-relaxed"
               />
             </div>
           ))}
 
-          <div className="flex gap-3">
-            <Button variant="outline" onClick={addJob} disabled={jobs.length >= 5} className="flex-1">
-              <Plus className="w-4 h-4 mr-2" /> Add Job
+          <div className="flex flex-col gap-3 sm:flex-row">
+            <Button variant="outline" onClick={addJob} disabled={jobs.length >= 5}>
+              <Plus /> Add job
             </Button>
-            <Button
-              onClick={compare}
-              disabled={isComparing || !resume.trim()}
-              className="flex-1 bg-primary hover:bg-primary/90 text-primary-foreground"
-            >
-              {isComparing ? (
-                <><RefreshCw className="w-4 h-4 mr-2 animate-spin" /> Comparing...</>
-              ) : (
-                <><BarChart2 className="w-4 h-4 mr-2" /> Compare</>
-              )}
+            <Button onClick={compare} disabled={isComparing || !resume.trim()} className="sm:ml-auto">
+              {isComparing ? <RefreshCw className="animate-spin" /> : <BarChart2 />}
+              {isComparing ? 'Comparing…' : 'Compare'}
             </Button>
           </div>
         </CardContent>
       </Card>
 
       {results.length > 0 && (
-        <Card className="bg-gradient-card shadow-md border-0">
+        <Card>
           <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <TrendingUp className="w-5 h-5 text-primary" />
-              Results — Best Match First
-            </CardTitle>
+            <CardTitle>Results</CardTitle>
+            <CardDescription>Sorted by match score, best first.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            {results.map((r, idx) => (
-              <div key={r.id} className="border border-border/50 rounded-xl p-5 space-y-3">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    {idx === 0 && <Badge className="bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-100">Best Match</Badge>}
-                    <span className="font-semibold">{r.title || `Job ${idx + 1}`}</span>
-                  </div>
-                  <span className={`text-2xl font-bold ${scoreColor(r.matchScore)}`}>{r.matchScore}%</span>
-                </div>
-
-                <div className="space-y-1">
-                  <div className="flex justify-between text-xs text-muted-foreground">
-                    <span>Match Score</span><span>{r.matchScore}%</span>
-                  </div>
-                  <div className="w-full bg-muted rounded-full h-2">
-                    <div
-                      className={`h-2 rounded-full transition-all ${scoreBarColor(r.matchScore)}`}
-                      style={{ width: `${r.matchScore}%` }}
-                    />
-                  </div>
-                </div>
-
-                {r.strengths?.length > 0 && (
-                  <div>
-                    <p className="text-xs font-medium text-muted-foreground mb-1">Strengths</p>
-                    <div className="flex flex-wrap gap-1">
-                      {r.strengths.map((s, i) => (
-                        <Badge key={i} variant="secondary" className="text-xs">{s}</Badge>
-                      ))}
+            {results.map((r, idx) => {
+              const tone = scoreTone(r.matchScore, COMPARISON_THRESHOLDS);
+              return (
+                <div key={r.id} className="space-y-4 rounded-md border p-5">
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="min-w-0 space-y-1">
+                      {idx === 0 && (
+                        <Badge variant="success">
+                          <Trophy className="h-3 w-3" aria-hidden /> Best match
+                        </Badge>
+                      )}
+                      <p className="truncate font-medium">{r.title || `Job ${idx + 1}`}</p>
                     </div>
+                    <span className={cn('text-2xl font-semibold tabular-nums', TONE_TEXT[tone])}>{r.matchScore}%</span>
                   </div>
-                )}
 
-                {r.missingKeywords?.length > 0 && (
-                  <div>
-                    <p className="text-xs font-medium text-muted-foreground mb-1">Missing Keywords</p>
-                    <div className="flex flex-wrap gap-1">
-                      {r.missingKeywords.slice(0, 6).map((k, i) => (
-                        <Badge key={i} variant="outline" className="text-xs text-destructive border-destructive/30">{k}</Badge>
-                      ))}
+                  <Progress value={r.matchScore} indicatorClassName={TONE_BG[tone]} />
+
+                  {r.strengths?.length > 0 && (
+                    <div>
+                      <p className="mb-1.5 text-xs font-medium text-muted-foreground">Strengths</p>
+                      <div className="flex flex-wrap gap-1.5">
+                        {r.strengths.map((s, i) => (
+                          <Badge key={i} variant="secondary" className="font-normal">{s}</Badge>
+                        ))}
+                      </div>
                     </div>
-                  </div>
-                )}
+                  )}
 
-                {r.topSuggestion && (
-                  <p className="text-xs text-muted-foreground bg-muted/50 rounded-lg px-3 py-2">
-                    Tip: {r.topSuggestion}
-                  </p>
-                )}
-              </div>
-            ))}
+                  {r.missingKeywords?.length > 0 && (
+                    <div>
+                      <p className="mb-1.5 text-xs font-medium text-muted-foreground">Missing keywords</p>
+                      <div className="flex flex-wrap gap-1.5">
+                        {r.missingKeywords.slice(0, 6).map((k, i) => (
+                          <Badge key={i} variant="outline" className="font-normal">{k}</Badge>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {r.topSuggestion && (
+                    <p className="rounded-md bg-muted/60 px-3 py-2 text-sm text-muted-foreground">
+                      <span className="font-medium text-foreground">Top suggestion: </span>
+                      {r.topSuggestion}
+                    </p>
+                  )}
+                </div>
+              );
+            })}
           </CardContent>
         </Card>
       )}

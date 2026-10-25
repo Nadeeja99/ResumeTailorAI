@@ -106,7 +106,7 @@ export const CoverLetterPanel = ({ resume, jobDescription }: CoverLetterPanelPro
     text.split('\n').map((line, i) => {
       if (!line.trim()) return <div key={i} className="h-3" />;
       return (
-        <p key={i} className="mb-0 text-sm text-black leading-relaxed">
+        <p key={i} className="mb-0 text-sm leading-relaxed text-zinc-800">
           {line}
         </p>
       );
@@ -114,88 +114,80 @@ export const CoverLetterPanel = ({ resume, jobDescription }: CoverLetterPanelPro
 
   return (
     <div className="space-y-6">
-      {/* Generator card */}
-      <Card className="bg-gradient-card shadow-md border-0">
+      <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <FileText className="w-5 h-5 text-primary" />
-            Cover Letter Generator
+            <FileText className="h-4 w-4 text-muted-foreground" aria-hidden />
+            Cover letter
           </CardTitle>
         </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="applicant-name">Your Name (optional)</Label>
-            <Input
-              id="applicant-name"
-              value={applicantName}
-              onChange={e => setApplicantName(e.target.value)}
-              placeholder="Jane Smith"
-            />
+        <CardContent>
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-end">
+            <div className="flex-1 space-y-2">
+              <Label htmlFor="applicant-name">Your name (optional)</Label>
+              <Input
+                id="applicant-name"
+                value={applicantName}
+                onChange={e => setApplicantName(e.target.value)}
+                placeholder="Jane Smith"
+              />
+            </div>
+            <Button onClick={generate} disabled={isGenerating || !resume.trim() || !jobDescription.trim()}>
+              {isGenerating ? <RefreshCw className="animate-spin" /> : <FileText />}
+              {isGenerating ? 'Writing…' : 'Generate cover letter'}
+            </Button>
           </div>
-          <Button
-            onClick={generate}
-            disabled={isGenerating || !resume.trim() || !jobDescription.trim()}
-            className="w-full bg-primary hover:bg-primary/90 text-primary-foreground h-12"
-          >
-            {isGenerating ? (
-              <><RefreshCw className="w-4 h-4 mr-2 animate-spin" /> Generating...</>
-            ) : (
-              <><FileText className="w-4 h-4 mr-2" /> Generate Cover Letter</>
-            )}
-          </Button>
         </CardContent>
       </Card>
 
-      {/* Live preview card — shown as soon as generation starts */}
+      {/* Live preview — shown as soon as generation starts */}
       {(coverLetter || isGenerating) && (
-        <Card className="bg-gradient-card shadow-md border-0">
+        <Card>
           <CardHeader>
-            <div className="flex items-center justify-between flex-wrap gap-2">
-              <CardTitle className="flex items-center gap-2 text-lg">
-                {isGenerating ? (
-                  <span className="flex items-center gap-2">
-                    Cover Letter Preview
-                    <span className="flex items-center gap-1.5 text-sm font-normal text-primary bg-primary/10 px-2 py-0.5 rounded-full">
-                      <RefreshCw className="w-3 h-3 animate-spin" /> Writing...
-                    </span>
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <CardTitle className="flex items-center gap-2">
+                Preview
+                {isGenerating && (
+                  <span className="inline-flex items-center gap-1.5 rounded-md bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary">
+                    <RefreshCw className="h-3 w-3 animate-spin" aria-hidden /> Writing…
                   </span>
-                ) : 'Cover Letter Preview'}
+                )}
               </CardTitle>
 
-              {/* Download buttons — only shown once generation is complete */}
+              {/* Export actions — only once generation is complete */}
               {!isGenerating && coverLetter && (
                 <div className="flex gap-2">
                   <Button variant="outline" size="sm" onClick={copyToClipboard}>
-                    <Copy className="w-4 h-4 mr-1" /> Copy
+                    <Copy /> Copy
                   </Button>
                   <Button variant="outline" size="sm" onClick={downloadAsPDF}>
-                    <Download className="w-4 h-4 mr-1" /> PDF
+                    <Download /> PDF
                   </Button>
-                  <Button size="sm" onClick={downloadAsWord}
-                    className="bg-primary hover:bg-primary/90 text-primary-foreground">
-                    <FileText className="w-4 h-4 mr-1" /> Word
+                  <Button size="sm" onClick={downloadAsWord}>
+                    <FileText /> Word
                   </Button>
                 </div>
               )}
             </div>
           </CardHeader>
           <CardContent>
+            {/* Paper keeps print colors in both themes so it matches the exported PDF */}
             <div
               id="cover-letter-content"
-              className="bg-white p-10 rounded-lg shadow-sm min-h-[500px] text-black"
+              className="min-h-[500px] rounded-md bg-white p-8 text-zinc-900 shadow-sm ring-1 ring-black/5 sm:p-12"
               style={{ fontFamily: 'Georgia, serif' }}
             >
               {coverLetter ? (
                 <div className="space-y-0">
                   {formatParagraphs(coverLetter)}
                   {isGenerating && (
-                    <span className="inline-block w-0.5 h-4 bg-gray-800 animate-pulse ml-0.5 align-middle" />
+                    <span className="ml-0.5 inline-block h-4 w-0.5 animate-pulse bg-zinc-900 align-middle" />
                   )}
                 </div>
               ) : (
-                <div className="flex items-center justify-center h-64 text-gray-400 gap-2">
-                  <RefreshCw className="w-4 h-4 animate-spin" />
-                  <p>Generating your cover letter...</p>
+                <div className="flex h-64 items-center justify-center gap-2 text-zinc-400">
+                  <RefreshCw className="h-4 w-4 animate-spin" aria-hidden />
+                  <p>Writing your cover letter…</p>
                 </div>
               )}
             </div>

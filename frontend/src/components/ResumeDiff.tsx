@@ -11,45 +11,39 @@ export const ResumeDiff = ({ original, improved }: ResumeDiffProps) => {
   const parts = diffWords(original, improved);
 
   return (
-    <Card className="bg-gradient-card shadow-md border-0">
-      <CardHeader>
+    <Card>
+      <CardHeader className="flex-row flex-wrap items-center justify-between gap-2 space-y-0">
         <CardTitle className="flex items-center gap-2">
-          <GitCompare className="w-5 h-5 text-primary" />
-          Resume Diff
+          <GitCompare className="h-4 w-4 text-muted-foreground" aria-hidden />
+          Changes
         </CardTitle>
-        <div className="flex items-center gap-4 text-xs text-muted-foreground mt-1">
-          <span className="flex items-center gap-1">
-            <span className="inline-block w-3 h-3 rounded-sm bg-green-200 dark:bg-green-900" /> Added
+        <div className="flex items-center gap-4 text-xs text-muted-foreground">
+          <span className="flex items-center gap-1.5">
+            <span className="inline-block h-2.5 w-2.5 rounded-sm bg-success/30" /> Added
           </span>
-          <span className="flex items-center gap-1">
-            <span className="inline-block w-3 h-3 rounded-sm bg-red-200 dark:bg-red-900" /> Removed
+          <span className="flex items-center gap-1.5">
+            <span className="inline-block h-2.5 w-2.5 rounded-sm bg-destructive/30" /> Removed
           </span>
         </div>
       </CardHeader>
       <CardContent>
-        <div className="bg-white dark:bg-zinc-900 rounded-lg p-6 text-sm leading-relaxed font-mono whitespace-pre-wrap max-h-[600px] overflow-y-auto">
+        <div className="max-h-[600px] overflow-y-auto whitespace-pre-wrap rounded-md border bg-muted/30 p-6 font-mono text-sm leading-relaxed">
           {parts.map((part, i) => {
             if (part.added) {
               return (
-                <mark
-                  key={i}
-                  className="bg-green-100 dark:bg-green-900/50 text-green-900 dark:text-green-100 rounded px-0.5"
-                >
+                <mark key={i} className="rounded-sm bg-success/15 px-0.5 text-success">
                   {part.value}
                 </mark>
               );
             }
             if (part.removed) {
               return (
-                <del
-                  key={i}
-                  className="bg-red-100 dark:bg-red-900/50 text-red-900 dark:text-red-100 rounded px-0.5 line-through opacity-70"
-                >
+                <del key={i} className="rounded-sm bg-destructive/10 px-0.5 text-destructive line-through opacity-80">
                   {part.value}
                 </del>
               );
             }
-            return <span key={i} className="text-foreground">{part.value}</span>;
+            return <span key={i}>{part.value}</span>;
           })}
         </div>
       </CardContent>

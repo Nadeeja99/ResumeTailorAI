@@ -2,6 +2,8 @@ import { useState, useRef, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/components/ui/use-toast';
+import { AppShell } from '@/components/layout/AppShell';
+import { EmptyState } from '@/components/common/EmptyState';
 import { ResumeInput } from '@/components/ResumeInput';
 import { JobDescriptionInput } from '@/components/JobDescriptionInput';
 import { AnalysisResults } from '@/components/AnalysisResults';
@@ -16,7 +18,29 @@ import InterviewPrepPanel from '@/components/InterviewPrepPanel';
 import { analyzeResume, generateImprovedResume, type AnalysisResult } from '@/services/resumeApi';
 import { fetchUsageStatus, type UsageStatus } from '@/lib/userStore';
 import { getErrorMessage } from '@/lib/utils';
-import { Sparkles, Target, FileText, RefreshCw, GitCompare, BarChart2, BrainCircuit, MessageSquare } from 'lucide-react';
+import { Sparkles, Target, FileText, Loader2, GitCompare, BarChart2, BrainCircuit, MessageSquare } from 'lucide-react';
+
+// Underline-style primary navigation; scrolls horizontally on narrow screens.
+const NAV_LIST =
+  'mb-8 h-auto w-full justify-start gap-1 overflow-x-auto rounded-none border-b bg-transparent p-0 scrollbar-none';
+const NAV_TRIGGER =
+  '-mb-px flex-none gap-2 rounded-none border-b-2 border-transparent px-3 pb-3 pt-2 text-muted-foreground hover:text-foreground data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-foreground data-[state=active]:shadow-none';
+
+const MAIN_TABS = [
+  { value: 'optimizer', label: 'Optimizer', icon: Target },
+  { value: 'semantic', label: 'Semantic match', icon: BrainCircuit },
+  { value: 'interview', label: 'Interview prep', icon: MessageSquare },
+  { value: 'cover-letter', label: 'Cover letter', icon: FileText },
+  { value: 'compare', label: 'Compare jobs', icon: BarChart2 },
+];
+
+const STEPS = [
+  { title: 'Add your resume', desc: 'Paste it, upload a PDF/DOCX, or import your LinkedIn profile.' },
+  { title: 'Add the job description', desc: 'Paste the posting or upload it as a file.' },
+  { title: 'Analyze and tailor', desc: 'Get a match score and keyword gaps, then stream a tailored rewrite.' },
+];
+
+const needsInputs = (what: string) => `Add your ${what} on the Optimizer tab to unlock this tool.`;
 
 const Index = () => {
   const [resume, setResume] = useState('');
@@ -138,12 +162,10 @@ const Index = () => {
     }
   };
 
-  return (
-    <div className="min-h-screen bg-background relative overflow-hidden selection:bg-primary/20">
-      <div className="pointer-events-none absolute top-[-10%] left-[-10%] w-[40%] h-[40%] rounded-full bg-primary/20 blur-[120px] animate-float opacity-70" />
-      <div className="pointer-events-none absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] rounded-full bg-accent/20 blur-[120px] animate-float-delayed opacity-70" />
+  const hasInputs = Boolean(resume.trim() && jobDescription.trim());
 
-      {/* Pricing modal */}
+  return (
+    <AppShell>
       <PricingModal
         open={pricingOpen}
         onClose={() => setPricingOpen(false)}
@@ -151,229 +173,148 @@ const Index = () => {
         usageLimit={usageStatus?.usageLimit ?? 3}
       />
 
-      {/* Hero */}
-      <div className="relative pt-24 pb-16 lg:pt-32 lg:pb-24">
-        <div className="relative z-10 container mx-auto px-4 text-center">
-          <div className="max-w-4xl mx-auto">
-            <div className="inline-flex items-center gap-2 bg-primary/10 border border-primary/20 backdrop-blur-md rounded-full px-5 py-2 mb-8 shadow-sm">
-              <Sparkles className="w-5 h-5 text-primary" />
-              <span className="text-foreground text-sm font-semibold tracking-wide">AI-Powered Resume Optimization</span>
-            </div>
-            <h1 className="text-5xl md:text-7xl font-extrabold text-foreground mb-6 tracking-tight leading-tight">
-              Tailor Your Resume to
-              <span className="block bg-gradient-to-r from-primary via-accent to-primary bg-[length:200%_auto] animate-pulse bg-clip-text text-transparent pb-2 mt-2">
-                Land Your Dream Job
-              </span>
-            </h1>
-            <p className="text-lg md:text-xl text-muted-foreground mb-10 max-w-2xl mx-auto leading-relaxed">
-              AI-powered analysis, semantic embeddings scoring, cover letter generation, and multi-job comparison — all in one place.
-            </p>
-          </div>
+      <section className="mb-10 max-w-2xl">
+        <p className="mb-3 inline-flex items-center gap-1.5 text-xs font-medium text-primary">
+          <Sparkles className="h-3.5 w-3.5" aria-hidden /> AI resume tailoring
+        </p>
+        <h1 className="text-3xl font-semibold sm:text-4xl">Tailor your resume to every role</h1>
+        <p className="mt-3 leading-relaxed text-muted-foreground">
+          Score your fit against a job description, close keyword gaps, and generate a tailored resume, cover letter
+          and interview prep — streamed in real time.
+        </p>
+      </section>
+
+      {usageStatus && (
+        <div className="mb-8">
+          <UsageBanner status={usageStatus} onUpgradeClick={() => setPricingOpen(true)} />
         </div>
-      </div>
+      )}
 
-      {/* Main App Tabs */}
-      <div className="container mx-auto px-4 pb-20">
-        {/* Usage banner — shown when on free plan */}
-        {usageStatus && (
-          <div className="mb-6">
-            <UsageBanner status={usageStatus} onUpgradeClick={() => setPricingOpen(true)} />
+      <Tabs defaultValue="optimizer" className="w-full">
+        <TabsList className={NAV_LIST}>
+          {MAIN_TABS.map(({ value, label, icon: Icon }) => (
+            <TabsTrigger key={value} value={value} className={NAV_TRIGGER}>
+              <Icon className="h-4 w-4" aria-hidden /> {label}
+            </TabsTrigger>
+          ))}
+        </TabsList>
+
+        {/* ── Optimizer ─────────────────────────────────────────────── */}
+        <TabsContent value="optimizer" className="mt-0 space-y-10">
+          <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+            <ResumeInput resume={resume} onResumeChange={setResume} />
+            <JobDescriptionInput jobDescription={jobDescription} onJobDescriptionChange={setJobDescription} />
           </div>
-        )}
 
-        <Tabs defaultValue="optimizer" className="w-full">
-          <TabsList className="grid w-full grid-cols-5 mb-8 max-w-3xl mx-auto">
-            <TabsTrigger value="optimizer" className="flex items-center gap-1 text-xs sm:text-sm">
-              <Target className="w-3.5 h-3.5" /> Optimizer
-            </TabsTrigger>
-            <TabsTrigger value="semantic" className="flex items-center gap-1 text-xs sm:text-sm">
-              <BrainCircuit className="w-3.5 h-3.5" /> Semantic
-            </TabsTrigger>
-            <TabsTrigger value="interview" className="flex items-center gap-1 text-xs sm:text-sm">
-              <MessageSquare className="w-3.5 h-3.5" /> Interview
-            </TabsTrigger>
-            <TabsTrigger value="cover-letter" className="flex items-center gap-1 text-xs sm:text-sm">
-              <FileText className="w-3.5 h-3.5" /> Cover Letter
-            </TabsTrigger>
-            <TabsTrigger value="compare" className="flex items-center gap-1 text-xs sm:text-sm">
-              <BarChart2 className="w-3.5 h-3.5" /> Compare
-            </TabsTrigger>
-          </TabsList>
-
-          {/* ── Optimizer Tab ──────────────────────────────────────────── */}
-          <TabsContent value="optimizer">
-            <div className="relative z-10 grid grid-cols-1 lg:grid-cols-2 gap-8 mb-12">
-              <ResumeInput resume={resume} onResumeChange={setResume} />
-              <JobDescriptionInput jobDescription={jobDescription} onJobDescriptionChange={setJobDescription} />
-            </div>
-
-            <div className="text-center mb-12 relative z-10">
-              <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
-                <Button
-                  onClick={handleAnalyze}
-                  disabled={isAnalyzing || !resume.trim() || !jobDescription.trim()}
-                  className="bg-primary hover:bg-primary/90 text-primary-foreground h-14 px-8 text-lg w-full sm:w-auto rounded-xl shadow-glow hover:-translate-y-1 transition-all"
-                  size="lg"
-                >
-                  {isAnalyzing ? (
-                    <><RefreshCw className="w-5 h-5 mr-2 animate-spin" /> Analyzing...</>
-                  ) : (
-                    <><Target className="w-5 h-5 mr-2" /> Analyze Resume</>
-                  )}
-                </Button>
-
-                {analysis && (
-                  <Button
-                    onClick={handleGenerate}
-                    disabled={isGenerating}
-                    variant="outline"
-                    size="lg"
-                    className="border-2 border-primary/20 bg-background/50 backdrop-blur-sm h-14 px-8 text-lg w-full sm:w-auto rounded-xl hover:bg-primary hover:text-primary-foreground hover:border-primary transition-all hover:-translate-y-1"
-                  >
-                    {isGenerating ? (
-                      <><RefreshCw className="w-5 h-5 mr-2 animate-spin" /> Optimizing...</>
-                    ) : (
-                      <><Sparkles className="w-5 h-5 mr-2" /> Generate Optimized Resume</>
-                    )}
-                  </Button>
-                )}
-              </div>
-            </div>
-
-            {/* Results area */}
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+            <Button onClick={handleAnalyze} disabled={isAnalyzing || !hasInputs} size="lg" className="w-full sm:w-auto">
+              {isAnalyzing ? <Loader2 className="animate-spin" /> : <Target />}
+              {isAnalyzing ? 'Analyzing…' : 'Analyze resume'}
+            </Button>
             {analysis && (
-              <div ref={resultsRef} className="relative z-10 space-y-8">
-                <AnalysisResults analysis={analysis} isLoading={isAnalyzing} />
+              <Button
+                onClick={handleGenerate}
+                disabled={isGenerating}
+                variant="outline"
+                size="lg"
+                className="w-full sm:w-auto"
+              >
+                {isGenerating ? <Loader2 className="animate-spin" /> : <Sparkles />}
+                {isGenerating ? 'Writing…' : 'Generate tailored resume'}
+              </Button>
+            )}
+            {!hasInputs && (
+              <p className="text-sm text-muted-foreground">Add a resume and a job description to begin.</p>
+            )}
+          </div>
 
-                {isGenerating && (
-                  <div className="flex items-center gap-3 px-5 py-3 rounded-xl bg-primary/10 border border-primary/20 text-primary text-sm font-medium w-fit">
-                    <RefreshCw className="w-4 h-4 animate-spin" />
-                    AI is writing your optimized resume — preview updates in real time below
-                  </div>
-                )}
+          {analysis ? (
+            <div ref={resultsRef} className="scroll-mt-20 space-y-8">
+              <AnalysisResults analysis={analysis} isLoading={isAnalyzing} />
 
-                {(improvedResume || isGenerating) && (
-                  <Tabs value={activeResultTab} onValueChange={setActiveResultTab}>
-                    <TabsList className="mb-4">
-                      <TabsTrigger value="preview" className="flex items-center gap-2">
-                        <FileText className="w-4 h-4" /> Preview & Download
-                      </TabsTrigger>
-                      {improvedResume && !isGenerating && (
-                        <TabsTrigger value="diff" className="flex items-center gap-2">
-                          <GitCompare className="w-4 h-4" /> Diff View
-                        </TabsTrigger>
-                      )}
-                    </TabsList>
-
-                    <TabsContent value="preview">
-                      <ResumePreview
-                        resume={improvedResume}
-                        isStreaming={isGenerating}
-                        suggestions={improvedResume && !isGenerating ? analysis.suggestedImprovements : []}
-                      />
-                    </TabsContent>
-
+              {(improvedResume || isGenerating) && (
+                <Tabs value={activeResultTab} onValueChange={setActiveResultTab}>
+                  <TabsList className="mb-4">
+                    <TabsTrigger value="preview" className="gap-2">
+                      <FileText className="h-4 w-4" /> Preview & download
+                    </TabsTrigger>
                     {improvedResume && !isGenerating && (
-                      <TabsContent value="diff">
-                        <ResumeDiff original={resume} improved={improvedResume} />
-                      </TabsContent>
+                      <TabsTrigger value="diff" className="gap-2">
+                        <GitCompare className="h-4 w-4" /> Changes
+                      </TabsTrigger>
                     )}
-                  </Tabs>
-                )}
+                  </TabsList>
 
-                {!improvedResume && !isGenerating && (
-                  <ResumePreview resume={resume} isStreaming={false} />
-                )}
-              </div>
-            )}
+                  <TabsContent value="preview">
+                    <ResumePreview
+                      resume={improvedResume}
+                      isStreaming={isGenerating}
+                      suggestions={improvedResume && !isGenerating ? analysis.suggestedImprovements : []}
+                    />
+                  </TabsContent>
 
-            {/* Feature cards */}
-            {!analysis && (
-              <div className="mt-24 max-w-6xl mx-auto relative z-10">
-                <h2 className="text-3xl md:text-4xl font-bold text-center mb-16 text-foreground tracking-tight">
-                  Why Choose Our AI Resume Optimizer?
-                </h2>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-                  {[
-                    { icon: Target, title: 'Smart Matching', desc: 'AI analyzes job descriptions to identify key requirements and missing keywords.' },
-                    { icon: BrainCircuit, title: 'Semantic Scoring', desc: 'Embedding-based analysis scores each resume section against what the JD actually means — not just keywords.' },
-                    { icon: Sparkles, title: 'Instant Results', desc: 'Get actionable insights and a rewritten resume streamed back in real time.' },
-                  ].map(({ icon: Icon, title, desc }) => (
-                    <div key={title} className="group text-center p-8 bg-card/40 backdrop-blur-xl border border-border/50 rounded-2xl shadow-sm hover:shadow-xl transition-all duration-500 hover:-translate-y-2">
-                      <div className="w-16 h-16 bg-primary/10 rounded-2xl flex items-center justify-center mx-auto mb-6 group-hover:bg-primary group-hover:scale-110 transition-all duration-500">
-                        <Icon className="w-8 h-8 text-primary group-hover:text-primary-foreground transition-colors duration-500" />
-                      </div>
-                      <h3 className="text-xl font-bold mb-3 text-foreground">{title}</h3>
-                      <p className="text-muted-foreground leading-relaxed">{desc}</p>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-          </TabsContent>
+                  {improvedResume && !isGenerating && (
+                    <TabsContent value="diff">
+                      <ResumeDiff original={resume} improved={improvedResume} />
+                    </TabsContent>
+                  )}
+                </Tabs>
+              )}
 
-          {/* ── Semantic Tab ───────────────────────────────────────────── */}
-          <TabsContent value="semantic">
-            {(!resume.trim() || !jobDescription.trim()) ? (
-              <div className="text-center py-16 text-muted-foreground">
-                <BrainCircuit className="w-12 h-12 mx-auto mb-4 opacity-30" />
-                <p className="text-lg font-medium">Add your resume and job description first</p>
-                <p className="text-sm mt-2">Go to the Optimizer tab to paste or upload your details.</p>
-              </div>
-            ) : (
-              <div className="max-w-4xl mx-auto p-6 rounded-2xl bg-card/40 backdrop-blur-xl border border-border/50 shadow-sm">
-                <SemanticAnalysis
-                  resume={resume}
-                  jobDescription={jobDescription}
-                  onUpgradeClick={() => setPricingOpen(true)}
-                />
-              </div>
-            )}
-          </TabsContent>
+              {!improvedResume && !isGenerating && <ResumePreview resume={resume} isStreaming={false} />}
+            </div>
+          ) : (
+            <ol className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+              {STEPS.map((step, i) => (
+                <li key={step.title} className="rounded-lg border bg-card p-5">
+                  <span className="mb-3 flex h-6 w-6 items-center justify-center rounded-full bg-secondary text-xs font-medium">
+                    {i + 1}
+                  </span>
+                  <p className="text-sm font-medium">{step.title}</p>
+                  <p className="mt-1 text-sm text-muted-foreground">{step.desc}</p>
+                </li>
+              ))}
+            </ol>
+          )}
+        </TabsContent>
 
-          {/* ── Interview Prep Tab ─────────────────────────────────────── */}
-          <TabsContent value="interview">
-            {(!resume.trim() || !jobDescription.trim()) ? (
-              <div className="text-center py-16 text-muted-foreground">
-                <MessageSquare className="w-12 h-12 mx-auto mb-4 opacity-30" />
-                <p className="text-lg font-medium">Add your resume and job description first</p>
-                <p className="text-sm mt-2">Go to the Optimizer tab to paste or upload your details.</p>
-              </div>
-            ) : (
-              <div className="max-w-4xl mx-auto p-6 rounded-2xl bg-card/40 backdrop-blur-xl border border-border/50 shadow-sm">
-                <InterviewPrepPanel resume={resume} jobDescription={jobDescription} />
-              </div>
-            )}
-          </TabsContent>
+        {/* ── Semantic ──────────────────────────────────────────────── */}
+        <TabsContent value="semantic" className="mt-0">
+          {hasInputs ? (
+            <SemanticAnalysis resume={resume} jobDescription={jobDescription} onUpgradeClick={() => setPricingOpen(true)} />
+          ) : (
+            <EmptyState icon={BrainCircuit} title="Resume and job description needed" description={needsInputs('resume and job description')} />
+          )}
+        </TabsContent>
 
-          {/* ── Cover Letter Tab ────────────────────────────────────────── */}
-          <TabsContent value="cover-letter">
-            {(!resume.trim() || !jobDescription.trim()) && (
-              <div className="text-center py-16 text-muted-foreground">
-                <FileText className="w-12 h-12 mx-auto mb-4 opacity-30" />
-                <p className="text-lg font-medium">Add your resume and job description first</p>
-                <p className="text-sm mt-2">Go to the Optimizer tab to paste or upload your details.</p>
-              </div>
-            )}
-            {resume.trim() && jobDescription.trim() && (
-              <CoverLetterPanel resume={resume} jobDescription={jobDescription} />
-            )}
-          </TabsContent>
+        {/* ── Interview prep ────────────────────────────────────────── */}
+        <TabsContent value="interview" className="mt-0">
+          {hasInputs ? (
+            <InterviewPrepPanel resume={resume} jobDescription={jobDescription} />
+          ) : (
+            <EmptyState icon={MessageSquare} title="Resume and job description needed" description={needsInputs('resume and job description')} />
+          )}
+        </TabsContent>
 
-          {/* ── Compare Jobs Tab ────────────────────────────────────────── */}
-          <TabsContent value="compare">
-            {!resume.trim() && (
-              <div className="text-center py-16 text-muted-foreground">
-                <BarChart2 className="w-12 h-12 mx-auto mb-4 opacity-30" />
-                <p className="text-lg font-medium">Add your resume first</p>
-                <p className="text-sm mt-2">Go to the Optimizer tab to paste or upload your resume.</p>
-              </div>
-            )}
-            {resume.trim() && <JobComparisonPanel resume={resume} />}
-          </TabsContent>
-        </Tabs>
-      </div>
-    </div>
+        {/* ── Cover letter ──────────────────────────────────────────── */}
+        <TabsContent value="cover-letter" className="mt-0">
+          {hasInputs ? (
+            <CoverLetterPanel resume={resume} jobDescription={jobDescription} />
+          ) : (
+            <EmptyState icon={FileText} title="Resume and job description needed" description={needsInputs('resume and job description')} />
+          )}
+        </TabsContent>
+
+        {/* ── Compare jobs ──────────────────────────────────────────── */}
+        <TabsContent value="compare" className="mt-0">
+          {resume.trim() ? (
+            <JobComparisonPanel resume={resume} />
+          ) : (
+            <EmptyState icon={BarChart2} title="Resume needed" description={needsInputs('resume')} />
+          )}
+        </TabsContent>
+      </Tabs>
+    </AppShell>
   );
 };
 

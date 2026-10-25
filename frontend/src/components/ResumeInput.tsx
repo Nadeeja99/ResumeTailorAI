@@ -131,11 +131,11 @@ export const ResumeInput = ({ resume, onResumeChange }: ResumeInputProps) => {
   }[linkedInStep];
 
   return (
-    <Card className="bg-gradient-card shadow-md border-0">
+    <Card>
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
-          <FileText className="w-5 h-5 text-primary" />
-          Your Resume
+          <FileText className="h-4 w-4 text-muted-foreground" aria-hidden />
+          Your resume
         </CardTitle>
       </CardHeader>
       <CardContent>
@@ -158,26 +158,26 @@ export const ResumeInput = ({ resume, onResumeChange }: ResumeInputProps) => {
               value={resume}
               onChange={e => onResumeChange(e.target.value)}
               placeholder="Paste your resume content here…"
-              className="min-h-[300px] resize-none"
+              className="min-h-[240px] resize-y sm:min-h-[320px] leading-relaxed"
             />
           </TabsContent>
 
           {/* ── Upload tab ── */}
           <TabsContent value="upload" className="space-y-4">
             <div
-              className={`border-2 border-dashed rounded-lg p-8 text-center transition-all ${
+              className={`rounded-lg border border-dashed p-8 text-center transition-all ${
                 dragActive
                   ? 'border-primary bg-primary/5'
                   : isProcessing
-                  ? 'border-muted-foreground bg-muted/20'
-                  : 'border-border hover:border-primary/50'
+                  ? 'border-muted-foreground bg-muted/40'
+                  : 'hover:border-primary/50'
               }`}
               onDragEnter={handleDrag}
               onDragLeave={handleDrag}
               onDragOver={handleDrag}
               onDrop={handleDrop}
             >
-              <Upload className={`w-12 h-12 mx-auto mb-4 ${isProcessing ? 'animate-pulse text-primary' : 'text-muted-foreground'}`} />
+              <Upload className={`mx-auto mb-3 h-8 w-8 ${isProcessing ? 'animate-pulse text-primary' : 'text-muted-foreground'}`} />
               <p className="text-sm text-muted-foreground mb-4">
                 {isProcessing ? 'Processing your file…' : 'Drag and drop your resume, or click to select'}
               </p>
@@ -200,7 +200,7 @@ export const ResumeInput = ({ resume, onResumeChange }: ResumeInputProps) => {
               <Textarea
                 value={resume}
                 onChange={e => onResumeChange(e.target.value)}
-                className="min-h-[200px] resize-none"
+                className="min-h-[200px] resize-y leading-relaxed"
                 disabled={isProcessing}
               />
             )}
@@ -208,24 +208,24 @@ export const ResumeInput = ({ resume, onResumeChange }: ResumeInputProps) => {
 
           {/* ── LinkedIn tab ── */}
           <TabsContent value="linkedin" className="space-y-4">
-            <div className="rounded-xl border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-900/20 p-4 text-sm text-blue-700 dark:text-blue-300 space-y-2">
+            <div className="space-y-2 rounded-lg border bg-muted/40 p-4 text-sm">
               <p className="font-semibold flex items-center gap-2">
                 <Linkedin className="w-4 h-4" /> How to export your LinkedIn PDF:
               </p>
-              <ol className="list-decimal list-inside space-y-1 text-xs">
+              <ol className="list-inside list-decimal space-y-1 text-xs text-muted-foreground">
                 <li>Go to your LinkedIn profile page</li>
                 <li>Click <strong>More</strong> → <strong>Save to PDF</strong></li>
                 <li>Upload the downloaded PDF below</li>
               </ol>
-              <p className="text-xs text-blue-500 dark:text-blue-400">
+              <p className="text-xs text-muted-foreground">
                 AI will clean up LinkedIn's multi-column layout and structure it as a proper resume.
               </p>
             </div>
 
-            <div className="border-2 border-dashed border-blue-300 dark:border-blue-700 rounded-xl p-8 text-center hover:border-blue-500 transition-colors">
+            <div className="rounded-lg border border-dashed p-8 text-center transition-colors hover:border-primary/50">
               {linkedInStep === 'idle' && (
                 <>
-                  <Linkedin className="w-12 h-12 mx-auto mb-3 text-blue-500" />
+                  <Linkedin className="mx-auto mb-3 h-8 w-8 text-muted-foreground" aria-hidden />
                   <p className="text-sm text-muted-foreground mb-4">Upload your LinkedIn profile PDF</p>
                   <input
                     type="file"
@@ -234,7 +234,7 @@ export const ResumeInput = ({ resume, onResumeChange }: ResumeInputProps) => {
                     className="hidden"
                     id="linkedin-upload"
                   />
-                  <Button asChild variant="outline" className="border-blue-400 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/30">
+                  <Button asChild variant="outline">
                     <label htmlFor="linkedin-upload" className="cursor-pointer">
                       Choose LinkedIn PDF
                     </label>
@@ -244,18 +244,18 @@ export const ResumeInput = ({ resume, onResumeChange }: ResumeInputProps) => {
 
               {(linkedInStep === 'extracting' || linkedInStep === 'parsing') && (
                 <div className="space-y-3 py-4">
-                  <Loader2 className="w-10 h-10 mx-auto text-blue-500 animate-spin" />
-                  <p className="text-sm font-medium text-blue-600 dark:text-blue-300">{linkedInStatusLabel}</p>
-                  <div className="w-48 mx-auto h-1.5 rounded-full bg-blue-100 dark:bg-blue-800 overflow-hidden">
-                    <div className={`h-full bg-blue-500 rounded-full transition-all duration-700 ${linkedInStep === 'extracting' ? 'w-1/3' : 'w-2/3'}`} />
+                  <Loader2 className="mx-auto h-8 w-8 animate-spin text-primary" aria-hidden />
+                  <p className="text-sm font-medium">{linkedInStatusLabel}</p>
+                  <div className="mx-auto h-1.5 w-48 overflow-hidden rounded-full bg-muted">
+                    <div className={`h-full rounded-full bg-primary transition-all duration-700 ${linkedInStep === 'extracting' ? 'w-1/3' : 'w-2/3'}`} />
                   </div>
                 </div>
               )}
 
               {linkedInStep === 'done' && (
                 <div className="space-y-3 py-4">
-                  <CheckCircle className="w-10 h-10 mx-auto text-green-500" />
-                  <p className="text-sm font-medium text-green-600 dark:text-green-300">{linkedInStatusLabel}</p>
+                  <CheckCircle className="mx-auto h-8 w-8 text-success" aria-hidden />
+                  <p className="text-sm font-medium text-success">{linkedInStatusLabel}</p>
                   <Button
                     variant="ghost"
                     size="sm"
@@ -272,7 +272,7 @@ export const ResumeInput = ({ resume, onResumeChange }: ResumeInputProps) => {
               <Textarea
                 value={resume}
                 onChange={e => onResumeChange(e.target.value)}
-                className="min-h-[200px] resize-none"
+                className="min-h-[200px] resize-y leading-relaxed"
               />
             )}
           </TabsContent>
