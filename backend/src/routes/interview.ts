@@ -1,17 +1,19 @@
-import { Router, Request, Response } from 'express';
+import { Router } from 'express';
 import { generateInterviewPrep } from '../services/gemini.js';
+import { aiRoute } from '../lib/aiRoute.js';
 import { validate } from '../middleware/validate.js';
-import { interviewPrepSchema } from '../schemas/resume.js';
+import { interviewPrepSchema, type InterviewPrepInput } from '../schemas/resume.js';
 
 const router = Router();
 
-router.post('/interview-prep', validate(interviewPrepSchema), async (req: Request, res: Response) => {
-  try {
-    const result = await generateInterviewPrep(req.body.resume, req.body.jobDescription);
-    res.json(result);
-  } catch (error: unknown) {
-    res.status(500).json({ error: (error as Error).message || 'Interview prep generation failed.' });
-  }
-});
+router.post(
+  '/interview-prep',
+  validate(interviewPrepSchema),
+  aiRoute(
+    'interview-prep',
+    (b: InterviewPrepInput) => ({ resume: b.resume, jobDescription: b.jobDescription }),
+    (b: InterviewPrepInput, ctx) => generateInterviewPrep(b.resume, b.jobDescription, ctx)
+  )
+);
 
 export default router;

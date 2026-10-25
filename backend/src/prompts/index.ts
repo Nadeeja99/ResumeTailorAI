@@ -1,4 +1,4 @@
-export const VERSION = 'v1';
+export const VERSION = 'v1.1';
 
 export function analyzeResumePrompt(resume: string, jobDescription: string): string {
   return `You are an expert resume analyst and career coach.
@@ -169,4 +169,12 @@ ${jobDescription}
 
 RESUME:
 ${resume}`;
+}
+
+export function extractRequirementsPrompt(jobDescription: string): string {
+  return `Extract 8-12 specific skills, technologies, and qualifications from this job description.
+Return a JSON object of the form {"requirements": [<short strings, 2-6 words each>]}.
+
+JOB DESCRIPTION:
+${jobDescription}`;
 }

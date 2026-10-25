@@ -1,6 +1,7 @@
-import { describe, it, expect, vi, beforeAll } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import request from 'supertest';
 import app from '../app.js';
+import { JD, RESUME, parseSSE } from './helpers.js';
 
 // Mock Gemini service so tests don't make real API calls
 vi.mock('../services/gemini.js', () => ({
@@ -29,21 +30,26 @@ vi.mock('../services/gemini.js', () => ({
   }),
 }));
 
-const RESUME = 'John Doe\nSoftware Engineer with 5 years of experience in TypeScript and React. Built scalable web applications. Led team of 4 engineers.';
-const JD = 'We are looking for a Senior Frontend Engineer with experience in React, TypeScript, Docker, and Kubernetes. Must have strong communication skills.';
-
 describe('POST /api/analyze', () => {
-  it('returns analysis for valid input', async () => {
+  it('returns analysis wrapped with telemetry for valid input', async () => {
     const res = await request(app)
       .post('/api/analyze')
       .send({ resume: RESUME, jobDescription: JD });
 
     expect(res.status).toBe(200);
-    expect(res.body).toHaveProperty('matchScore');
-    expect(res.body).toHaveProperty('missingKeywords');
-    expect(res.body).toHaveProperty('strengths');
-    expect(res.body).toHaveProperty('toneAnalysis');
-    expect(res.body).toHaveProperty('atsOptimization');
+    expect(res.body.data).toHaveProperty('matchScore');
+    expect(res.body.data).toHaveProperty('missingKeywords');
+    expect(res.body.data).toHaveProperty('strengths');
+    expect(res.body.data).toHaveProperty('toneAnalysis');
+    expect(res.body.data).toHaveProperty('atsOptimization');
+    expect(res.body.telemetry).toMatchObject({
+      operation: 'analyze',
+      requestId: res.headers['x-request-id'],
+      context: [
+        { name: 'resume', chars: RESUME.length },
+        { name: 'jobDescription', chars: JD.length },
+      ],
+    });
   });
 
   it('returns 400 when resume is missing', async () => {
@@ -77,15 +83,19 @@ describe('POST /api/analyze', () => {
 });
 
 describe('POST /api/generate-improved (streaming SSE)', () => {
-  it('streams SSE events for valid input', async () => {
+  it('streams meta, chunks, then done with telemetry', async () => {
     const res = await request(app)
       .post('/api/generate-improved')
       .send({ resume: RESUME, jobDescription: JD, suggestions: ['Add Docker'] });
 
     expect(res.status).toBe(200);
     expect(res.headers['content-type']).toContain('text/event-stream');
-    expect(res.text).toContain('data:');
-    expect(res.text).toContain('[DONE]');
+
+    const events = parseSSE(res.text);
+    expect(events.map(e => e.type)).toEqual(['meta', 'chunk', 'chunk', 'chunk', 'done']);
+    expect(events.filter(e => e.type === 'chunk').map(e => e.text).join('')).toBe('Improved resume text');
+    expect(events[0]).toMatchObject({ operation: 'generate-improved', requestId: res.headers['x-request-id'] });
+    expect(events.at(-1)).toHaveProperty('telemetry.operation', 'generate-improved');
   });
 
   it('returns 400 for missing fields', async () => {
@@ -104,7 +114,7 @@ describe('POST /api/generate-cover-letter (streaming SSE)', () => {
 
     expect(res.status).toBe(200);
     expect(res.headers['content-type']).toContain('text/event-stream');
-    expect(res.text).toContain('[DONE]');
+    expect(parseSSE(res.text).at(-1)?.type).toBe('done');
   });
 });
 
@@ -121,9 +131,14 @@ describe('POST /api/compare-jobs', () => {
       });
 
     expect(res.status).toBe(200);
-    expect(res.body).toHaveProperty('results');
-    expect(Array.isArray(res.body.results)).toBe(true);
-    expect(res.body.results.length).toBe(2);
+    expect(Array.isArray(res.body.data.results)).toBe(true);
+    expect(res.body.data.results.length).toBe(2);
+    expect(res.body.data.results[0]).toMatchObject({ id: '1', title: 'Frontend Engineer', matchScore: 72 });
+    expect(res.body.telemetry.context.map((c: { name: string }) => c.name)).toEqual([
+      'resume',
+      'job: Frontend Engineer',
+      'job: Backend Engineer',
+    ]);
   });
 
   it('returns 400 when jobDescriptions is empty', async () => {

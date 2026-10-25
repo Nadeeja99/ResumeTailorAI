@@ -13,15 +13,16 @@ function sseResponse(pieces: string[]): Response {
   return new Response(body, { status: 200, headers: { 'Content-Type': 'text/event-stream' } });
 }
 
-describe('generateImprovedResume (SSE)', () => {
-  it('assembles chunks, including events split across reads', async () => {
+const frame = (event: object) => `data: ${JSON.stringify(event)}\n\n`;
+const META = frame({ type: 'meta', requestId: 'r1', operation: 'generate-improved', promptVersion: 'v1.1' });
+const DONE = frame({ type: 'done', telemetry: { requestId: 'r1' } });
+
+describe('generateImprovedResume (SSE v2)', () => {
+  it('assembles chunks, including events split across reads, and skips heartbeats', async () => {
+    const hello = frame({ type: 'chunk', text: 'Hello' });
+    const world = frame({ type: 'chunk', text: ' world' });
     vi.spyOn(globalThis, 'fetch').mockResolvedValue(
-      sseResponse([
-        'data: {"chunk":"Hello"}\n\n',
-        'data: {"chu',
-        'nk":" world"}\n\n',
-        'data: [DONE]\n\n',
-      ])
+      sseResponse([META, hello, ': ping\n\n', world.slice(0, 12), world.slice(12), DONE])
     );
     const onChunk = vi.fn();
 
@@ -33,7 +34,11 @@ describe('generateImprovedResume (SSE)', () => {
 
   it('throws when the backend emits an error event', async () => {
     vi.spyOn(globalThis, 'fetch').mockResolvedValue(
-      sseResponse(['data: {"chunk":"partial"}\n\n', 'data: {"error":"quota exceeded"}\n\n'])
+      sseResponse([
+        META,
+        frame({ type: 'chunk', text: 'partial' }),
+        frame({ type: 'error', error: 'quota exceeded', code: 'QUOTA', telemetry: {} }),
+      ])
     );
 
     await expect(generateImprovedResume('resume', 'jd', [], () => {})).rejects.toThrow('quota exceeded');
@@ -41,14 +46,28 @@ describe('generateImprovedResume (SSE)', () => {
 
   it('skips malformed lines', async () => {
     vi.spyOn(globalThis, 'fetch').mockResolvedValue(
-      sseResponse(['data: not-json\n\n', 'data: {"chunk":"ok"}\n\n', 'data: [DONE]\n\n'])
+      sseResponse([META, 'data: not-json\n\n', frame({ type: 'chunk', text: 'ok' }), DONE])
     );
 
     await expect(generateImprovedResume('resume', 'jd', [], () => {})).resolves.toBe('ok');
   });
+
+  it('rejects when the stream ends without a done event', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(sseResponse([META, frame({ type: 'chunk', text: 'cut' })]));
+
+    await expect(generateImprovedResume('resume', 'jd', [], () => {})).rejects.toThrow(/connection closed/i);
+  });
 });
 
 describe('post helpers', () => {
+  it('unwraps the { data, telemetry } envelope', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({ data: { matchScore: 70 }, telemetry: { requestId: 'r2' } }), { status: 200 })
+    );
+
+    await expect(analyzeResume('resume', 'jd')).resolves.toEqual({ matchScore: 70 });
+  });
+
   it('surfaces the backend error message on non-2xx', async () => {
     vi.spyOn(globalThis, 'fetch').mockResolvedValue(
       new Response(JSON.stringify({ error: 'Resume must be at least 50 characters.' }), { status: 400 })

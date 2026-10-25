@@ -63,3 +63,5 @@ export type GenerateImprovedInput = z.infer<typeof generateImprovedSchema>;
 export type CoverLetterInput = z.infer<typeof coverLetterSchema>;
 export type CompareJobsInput = z.infer<typeof compareJobsSchema>;
 export type SemanticAnalysisInput = z.infer<typeof semanticAnalysisSchema>;
+export type LinkedInInput = z.infer<typeof linkedInSchema>;
+export type InterviewPrepInput = z.infer<typeof interviewPrepSchema>;

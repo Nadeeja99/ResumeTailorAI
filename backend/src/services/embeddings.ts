@@ -1,18 +1,34 @@
-import { GoogleGenerativeAI } from '@google/generative-ai';
+import { env } from '../config/env.js';
+import { extractRequirementsPrompt } from '../prompts/index.js';
+import { jdRequirementsOutputSchema } from '../schemas/ai.js';
+import { getClient, type CallContext } from './llm/client.js';
+import { AIError, aborted, toAIError } from './llm/errors.js';
+import { generateStructured } from './llm/structured.js';
 
-function getInstance(): GoogleGenerativeAI {
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey || apiKey === 'your_gemini_api_key_here') {
-    throw new Error('GEMINI_API_KEY is not set in backend/.env');
+// Cosine similarity for related text clusters roughly in [FLOOR, FLOOR + RANGE];
+// rescale that band to 0-100. Calibrated on text-embedding-004 — recheck when changing EMBEDDING_MODEL.
+const SIMILARITY_FLOOR = 0.5;
+const SIMILARITY_RANGE = 0.45;
+const COVERED_THRESHOLD = 50;
+
+async function embedMany(texts: string[], ctx: CallContext): Promise<number[][]> {
+  if (texts.length === 0) return [];
+  try {
+    const response = await getClient().models.embedContent({
+      model: env.EMBEDDING_MODEL,
+      // One Content per text: multimodal models (gemini-embedding-2) merge a bare string[] into a single embedding
+      contents: texts.map(text => ({ role: 'user', parts: [{ text }] })),
+      config: { abortSignal: ctx.signal },
+    });
+    const vectors = response.embeddings?.map(e => e.values ?? []) ?? [];
+    if (vectors.length !== texts.length || vectors.some(v => v.length === 0)) {
+      throw new AIError('The embedding response was incomplete.', 'UPSTREAM');
+    }
+    ctx.tracker.recordEmbeddings(env.EMBEDDING_MODEL, texts.length);
+    return vectors;
+  } catch (error) {
+    throw ctx.signal.aborted ? aborted() : toAIError(error);
   }
-  return new GoogleGenerativeAI(apiKey);
-}
-
-async function embed(text: string): Promise<number[]> {
-  const client = getInstance();
-  const model = client.getGenerativeModel({ model: 'text-embedding-004' });
-  const result = await model.embedContent(text);
-  return result.embedding.values;
 }
 
 function cosineSimilarity(a: number[], b: number[]): number {
@@ -25,6 +41,11 @@ function cosineSimilarity(a: number[], b: number[]): number {
   const denom = Math.sqrt(magA) * Math.sqrt(magB);
   return denom === 0 ? 0 : dot / denom;
 }
+
+const toScore = (similarity: number) =>
+  Math.round(Math.min(100, Math.max(0, ((similarity - SIMILARITY_FLOOR) / SIMILARITY_RANGE) * 100)));
+
+const round3 = (n: number) => Math.round(n * 1000) / 1000;
 
 // Splits resume text into named sections heuristically
 function extractResumeSections(resume: string): Record<string, string> {
@@ -51,88 +72,84 @@ function extractResumeSections(resume: string): Record<string, string> {
     }
   }
 
-  // Drop empty sections
-  return Object.fromEntries(
+  const nonEmpty = Object.fromEntries(
     Object.entries(sections)
       .map(([k, v]) => [k, v.join('\n').trim()])
-      .filter(([, v]) => (v as string).length > 20)
-  ) as Record<string, string>;
+      .filter(([, v]) => v.length > 20)
+  );
+  // No recognisable headings → score the resume as a single chunk
+  return Object.keys(nonEmpty).length > 0 ? nonEmpty : { resume: resume.trim() };
 }
 
 export interface SemanticSection {
   name: string;
   score: number; // 0-100
+  rawSimilarity: number; // cosine similarity vs. the full JD
+  chars: number;
   excerpt: string;
+  text: string;
+}
+
+export interface SemanticRequirement {
+  requirement: string;
+  covered: boolean;
+  score: number;
+  rawSimilarity: number;
+  bestSection: string;
 }
 
 export interface SemanticAnalysisResult {
-  overallScore: number;         // 0-100 weighted average
-  sections: SemanticSection[];  // per-section scores
-  requirementCoverage: {        // how well each JD requirement is covered
-    requirement: string;
-    covered: boolean;
-    score: number;
-  }[];
-  topGaps: string[];            // requirements with lowest coverage
-}
-
-// Extract key requirements from the job description using Gemini JSON mode
-async function extractJDRequirements(jobDescription: string): Promise<string[]> {
-  const client = getInstance();
-  const model = client.getGenerativeModel({
-    model: 'gemini-2.0-flash',
-    generationConfig: { responseMimeType: 'application/json' },
-  });
-
-  const prompt = `Extract 8-12 specific skills, technologies, and qualifications from this job description.
-Return a JSON array of short strings (2-6 words each).
-Job Description:
-${jobDescription}`;
-
-  const result = await model.generateContent(prompt);
-  const text = result.response.text().trim();
-  try {
-    const parsed = JSON.parse(text);
-    return Array.isArray(parsed) ? parsed : parsed.requirements ?? [];
-  } catch {
-    return [];
-  }
+  overallScore: number; // 0-100 average of section scores
+  sections: SemanticSection[];
+  requirementCoverage: SemanticRequirement[];
+  topGaps: string[];
+  embeddingModel: string;
 }
 
 export async function semanticAnalysis(
   resume: string,
-  jobDescription: string
+  jobDescription: string,
+  ctx: CallContext
 ): Promise<SemanticAnalysisResult> {
   const sections = extractResumeSections(resume);
-
-  // Fan out all embeddings in parallel
-  const [jdEmbedding, requirementsRaw, ...sectionEmbeddings] = await Promise.all([
-    embed(jobDescription),
-    extractJDRequirements(jobDescription),
-    ...Object.values(sections).map(text => embed(text as string)),
-  ]);
-
-  // Per-section scores against full JD embedding
   const sectionNames = Object.keys(sections);
+
+  // Two batched embedding calls total; requirement extraction runs alongside the first
+  const [[jdEmbedding, ...sectionEmbeddings], { requirements }] = await Promise.all([
+    embedMany([jobDescription, ...Object.values(sections)], ctx),
+    generateStructured(extractRequirementsPrompt(jobDescription), jdRequirementsOutputSchema, ctx),
+  ]);
+  const requirementEmbeddings = await embedMany(requirements, ctx);
+
   const sectionResults: SemanticSection[] = sectionNames.map((name, i) => {
-    const raw = cosineSimilarity(sectionEmbeddings[i], jdEmbedding);
-    // Cosine similarity typically 0.6-0.95 for relevant text; normalise to 0-100
-    const score = Math.round(Math.min(100, Math.max(0, (raw - 0.5) / 0.45 * 100)));
-    const text = sections[name] as string;
+    const similarity = cosineSimilarity(sectionEmbeddings[i], jdEmbedding);
+    const text = sections[name];
     return {
       name: name.charAt(0).toUpperCase() + name.slice(1),
-      score,
+      score: toScore(similarity),
+      rawSimilarity: round3(similarity),
+      chars: text.length,
       excerpt: text.slice(0, 120) + (text.length > 120 ? '…' : ''),
+      text,
     };
   });
 
-  // Requirement coverage
-  const requirementEmbeddings = await Promise.all(requirementsRaw.map(r => embed(r)));
-  const requirementCoverage = requirementsRaw.map((req, i) => {
-    // Score against best-matching resume section
-    const best = Math.max(...sectionEmbeddings.map(se => cosineSimilarity(se, requirementEmbeddings[i])));
-    const score = Math.round(Math.min(100, Math.max(0, (best - 0.5) / 0.45 * 100)));
-    return { requirement: req, covered: score >= 50, score };
+  const requirementCoverage: SemanticRequirement[] = requirements.map((requirement, i) => {
+    // Score each requirement against its best-matching resume section
+    let best = -1;
+    let bestIndex = 0;
+    sectionEmbeddings.forEach((se, j) => {
+      const s = cosineSimilarity(se, requirementEmbeddings[i]);
+      if (s > best) [best, bestIndex] = [s, j];
+    });
+    const score = toScore(best);
+    return {
+      requirement,
+      covered: score >= COVERED_THRESHOLD,
+      score,
+      rawSimilarity: round3(best),
+      bestSection: sectionResults[bestIndex].name,
+    };
   });
 
   const overallScore = Math.round(
@@ -145,5 +162,5 @@ export async function semanticAnalysis(
     .slice(0, 5)
     .map(r => r.requirement);
 
-  return { overallScore, sections: sectionResults, requirementCoverage, topGaps };
+  return { overallScore, sections: sectionResults, requirementCoverage, topGaps, embeddingModel: env.EMBEDDING_MODEL };
 }

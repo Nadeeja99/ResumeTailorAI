@@ -1,14 +1,15 @@
 import Database from 'better-sqlite3';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { env } from '../config/env.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const DB_PATH = process.env.NODE_ENV === 'test'
+const DB_PATH = env.NODE_ENV === 'test'
   ? ':memory:'
-  : process.env.DATABASE_PATH ?? path.join(__dirname, '../../../data/app.db');
+  : env.DATABASE_PATH ?? path.join(__dirname, '../../../data/app.db');
 
 // Ensure data directory exists for non-test environments
-if (process.env.NODE_ENV !== 'test') {
+if (env.NODE_ENV !== 'test') {
   const { mkdirSync } = await import('fs');
   mkdirSync(path.dirname(DB_PATH), { recursive: true });
 }

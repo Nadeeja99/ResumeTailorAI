@@ -6,7 +6,13 @@ services:
       NODE_ENV: production
       PORT: "3001"
       DATABASE_PATH: /data/app.db
+      TRUST_PROXY: "1" # nginx sits in front; use its X-Forwarded-For for per-client rate limits
       GEMINI_API_KEY: ${GEMINI_API_KEY:?Set GEMINI_API_KEY in .env}
+      GEMINI_MODELS: ${GEMINI_MODELS:-}
+      EMBEDDING_MODEL: ${EMBEDDING_MODEL:-}
+      LLM_THINKING_LEVEL: ${LLM_THINKING_LEVEL:-}
+      EXPOSE_PROMPTS: ${EXPOSE_PROMPTS:-false}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
       # Billing is optional; routes return errors when these are blank
       STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY:-}
       STRIPE_PRO_PRICE_ID: ${STRIPE_PRO_PRICE_ID:-}
@@ -22,7 +28,8 @@ services:
     ports:
       - "8080:80"
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy
 
 volumes:
   app-data:

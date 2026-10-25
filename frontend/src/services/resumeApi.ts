@@ -1,3 +1,5 @@
+import type { AIResponse, SSEEvent, StreamResult } from '@/types/ai';
+
 const API_BASE = '/api';
 
 async function readError(res: Response): Promise<Error> {
@@ -5,27 +7,30 @@ async function readError(res: Response): Promise<Error> {
   return new Error(err.error || `Request failed (${res.status})`);
 }
 
-async function post<T>(path: string, body: unknown): Promise<T> {
+// AI endpoints respond with `{ data, telemetry }`.
+async function post<T>(path: string, body: unknown, signal?: AbortSignal): Promise<AIResponse<T>> {
   const res = await fetch(`${API_BASE}${path}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
+    signal,
   });
   if (!res.ok) throw await readError(res);
-  return res.json() as Promise<T>;
+  return res.json() as Promise<AIResponse<T>>;
 }
 
-// Consume an SSE stream and call onChunk for every piece of text.
-// Returns the full assembled text.
+// Consume an SSE v2 stream (meta → chunk* → done | error), calling onChunk for every piece of text.
 async function streamSSE(
   path: string,
   body: unknown,
-  onChunk: (chunk: string) => void
-): Promise<string> {
+  onChunk: (chunk: string) => void,
+  signal?: AbortSignal
+): Promise<StreamResult> {
   const res = await fetch(`${API_BASE}${path}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
+    signal,
   });
 
   if (!res.ok || !res.body) throw await readError(res);
@@ -33,7 +38,7 @@ async function streamSSE(
   const reader = res.body.getReader();
   const decoder = new TextDecoder();
   let buffer = '';
-  let full = '';
+  let text = '';
 
   while (true) {
     const { done, value } = await reader.read();
@@ -44,25 +49,26 @@ async function streamSSE(
     buffer = lines.pop() ?? '';
 
     for (const line of lines) {
-      if (!line.startsWith('data: ')) continue;
-      const payload = line.slice(6).trim();
-      if (payload === '[DONE]') return full;
+      if (!line.startsWith('data: ')) continue; // also skips `: ping` heartbeats
 
-      let parsed: { chunk?: string; error?: string };
+      let event: SSEEvent;
       try {
-        parsed = JSON.parse(payload);
+        event = JSON.parse(line.slice(6));
       } catch {
         continue; // skip genuinely malformed JSON lines
       }
 
-      if (parsed.error) throw new Error(parsed.error); // propagate backend errors
-      if (parsed.chunk) {
-        full += parsed.chunk;
-        onChunk(parsed.chunk);
+      if (event.type === 'chunk') {
+        text += event.text;
+        onChunk(event.text);
+      } else if (event.type === 'done') {
+        return { text, telemetry: event.telemetry };
+      } else if (event.type === 'error') {
+        throw new Error(event.error);
       }
     }
   }
-  return full;
+  throw new Error('The connection closed before the response finished. Please try again.');
 }
 
 // ── Analysis ─────────────────────────────────────────────────────────────────
@@ -77,7 +83,7 @@ export interface AnalysisResult {
 }
 
 export function analyzeResume(resume: string, jobDescription: string): Promise<AnalysisResult> {
-  return post('/analyze', { resume, jobDescription });
+  return post<AnalysisResult>('/analyze', { resume, jobDescription }).then(r => r.data);
 }
 
 // ── Improved resume (streaming) ───────────────────────────────────────────────
@@ -88,7 +94,7 @@ export function generateImprovedResume(
   suggestions: string[],
   onChunk: (chunk: string) => void
 ): Promise<string> {
-  return streamSSE('/generate-improved', { resume, jobDescription, suggestions }, onChunk);
+  return streamSSE('/generate-improved', { resume, jobDescription, suggestions }, onChunk).then(r => r.text);
 }
 
 // ── Cover letter (streaming) ──────────────────────────────────────────────────
@@ -99,7 +105,7 @@ export function generateCoverLetter(
   applicantName: string,
   onChunk: (chunk: string) => void
 ): Promise<string> {
-  return streamSSE('/generate-cover-letter', { resume, jobDescription, applicantName }, onChunk);
+  return streamSSE('/generate-cover-letter', { resume, jobDescription, applicantName }, onChunk).then(r => r.text);
 }
 
 // ── Job comparison ────────────────────────────────────────────────────────────
@@ -123,7 +129,7 @@ export function compareJobs(
   resume: string,
   jobDescriptions: JobComparisonJob[]
 ): Promise<{ results: JobComparisonResult[] }> {
-  return post('/compare-jobs', { resume, jobDescriptions });
+  return post<{ results: JobComparisonResult[] }>('/compare-jobs', { resume, jobDescriptions }).then(r => r.data);
 }
 
 // ── Semantic analysis ─────────────────────────────────────────────────────────
@@ -131,13 +137,18 @@ export function compareJobs(
 export interface SemanticSection {
   name: string;
   score: number;
+  rawSimilarity: number;
+  chars: number;
   excerpt: string;
+  text: string;
 }
 
 export interface SemanticRequirement {
   requirement: string;
   covered: boolean;
   score: number;
+  rawSimilarity: number;
+  bestSection: string;
 }
 
 export interface SemanticAnalysisResult {
@@ -145,19 +156,20 @@ export interface SemanticAnalysisResult {
   sections: SemanticSection[];
   requirementCoverage: SemanticRequirement[];
   topGaps: string[];
+  embeddingModel: string;
 }
 
 export function semanticAnalyze(
   resume: string,
   jobDescription: string
 ): Promise<SemanticAnalysisResult> {
-  return post('/semantic-analysis', { resume, jobDescription });
+  return post<SemanticAnalysisResult>('/semantic-analysis', { resume, jobDescription }).then(r => r.data);
 }
 
 // ── LinkedIn PDF parsing ──────────────────────────────────────────────────────
 
 export async function parseLinkedIn(rawText: string): Promise<string> {
-  const data = await post<{ resume: string }>('/parse-linkedin', { rawText });
+  const { data } = await post<{ resume: string }>('/parse-linkedin', { rawText });
   return data.resume;
 }
 
@@ -182,5 +194,5 @@ export function generateInterviewPrep(
   resume: string,
   jobDescription: string
 ): Promise<InterviewPrepResult> {
-  return post('/interview-prep', { resume, jobDescription });
+  return post<InterviewPrepResult>('/interview-prep', { resume, jobDescription }).then(r => r.data);
 }
