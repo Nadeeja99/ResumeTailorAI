@@ -34,7 +34,8 @@ export async function extractPdfText(file: File): Promise<string> {
   ]);
   pdfjs.GlobalWorkerOptions.workerSrc = workerSrc;
 
-  const pdf = await pdfjs.getDocument({ data: await file.arrayBuffer() }).promise;
+  // isEvalSupported:false keeps pdf.js from trying `new Function` (blocked by our CSP; not needed for text)
+  const pdf = await pdfjs.getDocument({ data: await file.arrayBuffer(), isEvalSupported: false }).promise;
   const pages: string[] = [];
   for (let i = 1; i <= pdf.numPages; i++) {
     const content = await (await pdf.getPage(i)).getTextContent();

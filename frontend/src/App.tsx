@@ -11,7 +11,7 @@ const App = () => (
     <TooltipProvider delayDuration={300}>
       <Toaster />
       <ErrorBoundary label="The app">
-        <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+        <BrowserRouter>
           <Routes>
             <Route path="/" element={<Index />} />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}

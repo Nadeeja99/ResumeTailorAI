@@ -1,13 +1,16 @@
-import { useMemo, useState } from 'react';
+import { lazy, Suspense, useMemo, useState } from 'react';
 import { FileText, GitCompare } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { RequestError } from '@/components/common/RequestError';
 import { StreamControls } from '@/components/ai/StreamControls';
 import { TelemetryDrawer } from '@/components/ai/telemetry/TelemetryDrawer';
-import { ResumeDiff } from '@/components/ResumeDiff';
+import { Skeleton } from '@/components/ui/skeleton';
 import { ResumePreview } from '@/components/ResumePreview';
 import type { useAIStream } from '@/hooks/useAI';
 import { markdownToPlainText } from '@/lib/markdownBlocks';
+
+// The word-diff view (and the `diff` library) only load when the Changes tab is opened
+const ResumeDiff = lazy(() => import('@/components/ResumeDiff').then(m => ({ default: m.ResumeDiff })));
 
 interface GeneratedResumeProps {
   original: string;
@@ -74,7 +77,9 @@ export function GeneratedResume({ original, stream, suggestions, onRetry }: Gene
         </TabsContent>
         {finished && (
           <TabsContent value="diff">
-            <ResumeDiff original={original} improved={plainRewrite} />
+            <Suspense fallback={<Skeleton className="h-96 w-full" />}>
+              <ResumeDiff original={original} improved={plainRewrite} />
+            </Suspense>
           </TabsContent>
         )}
       </Tabs>

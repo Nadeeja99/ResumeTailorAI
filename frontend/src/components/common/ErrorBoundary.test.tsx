@@ -12,6 +12,9 @@ function Bomb({ explode }: { explode: boolean }) {
 describe('ErrorBoundary', () => {
   it('contains a render error and recovers on "Try again"', async () => {
     vi.spyOn(console, 'error').mockImplementation(() => {});
+    // jsdom reports errors React rethrows during development; the boundary still catches them
+    const silence = (e: ErrorEvent) => e.preventDefault();
+    window.addEventListener('error', silence);
     const user = userEvent.setup();
 
     function Harness() {
@@ -36,5 +39,6 @@ describe('ErrorBoundary', () => {
     await user.click(screen.getByRole('button', { name: /try again/i }));
 
     expect(screen.getByText('All good')).toBeInTheDocument();
+    window.removeEventListener('error', silence);
   });
 });

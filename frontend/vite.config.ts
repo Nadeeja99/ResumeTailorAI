@@ -27,9 +27,31 @@ export default defineConfig({
   optimizeDeps: {
     include: ['react-markdown', 'remark-gfm', 'prism-react-renderer', 'pdfjs-dist', 'mammoth', 'jspdf', 'html2canvas', 'docx'],
   },
+  build: {
+    rolldownOptions: {
+      output: {
+        // Rarely-changing framework/UI code gets its own long-cached chunks, so an app deploy
+        // only invalidates the (small) app chunk. Lazy features keep their automatic split chunks.
+        codeSplitting: {
+          groups: [
+            {
+              name: 'react',
+              test: /node_modules[\\/](react|react-dom|scheduler|react-router|react-router-dom|@remix-run)[\\/]/,
+              priority: 20,
+            },
+            {
+              name: 'ui',
+              test: /node_modules[\\/](@radix-ui|@floating-ui|lucide-react|next-themes|class-variance-authority|clsx|tailwind-merge)[\\/]/,
+              priority: 10,
+            },
+          ],
+        },
+      },
+    },
+  },
   resolve: {
     alias: {
-      "@": path.resolve(__dirname, "./src"),
+      "@": path.resolve(import.meta.dirname, "./src"),
     },
   },
   test: {

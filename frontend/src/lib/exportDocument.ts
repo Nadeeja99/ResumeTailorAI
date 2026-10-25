@@ -1,6 +1,8 @@
 // PDF / Word export shared by the resume preview and cover letter.
 // Export libraries load on first use to keep them out of the initial bundle.
 
+import { parseMarkdownBlocks } from './markdownBlocks';
+
 export type LineKind = 'heading' | 'bullet' | 'text' | 'blank';
 
 const SECTION_HEADING = /^(EXPERIENCE|EDUCATION|SKILLS|CONTACT|SUMMARY|OBJECTIVE|PROJECTS|CERTIFICATIONS)/i;
@@ -72,10 +74,7 @@ export async function exportTextToDocx(text: string, filename: string, { structu
 
 /** Writes the resume prompt's Markdown to .docx with real Word headings, bullets and emphasis. */
 export async function exportMarkdownToDocx(markdown: string, filename: string): Promise<void> {
-  const [{ Document, HeadingLevel, Packer, Paragraph, TextRun }, { parseMarkdownBlocks }] = await Promise.all([
-    import('docx'),
-    import('./markdownBlocks'),
-  ]);
+  const { Document, HeadingLevel, Packer, Paragraph, TextRun } = await import('docx');
 
   const HEADINGS = { h1: HeadingLevel.TITLE, h2: HeadingLevel.HEADING_2, h3: HeadingLevel.HEADING_3 } as const;
 
