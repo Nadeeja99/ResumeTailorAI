@@ -117,3 +117,8 @@ temp/
 .local/ 
 # Local SQLite data (mounted as a volume in Docker)
 data/
+
+# Playwright
+frontend/test-results/
+frontend/playwright-report/
+frontend/blob-report/

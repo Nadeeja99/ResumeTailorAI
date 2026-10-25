@@ -36,6 +36,10 @@ export class AIError extends Error {
 
 export const aborted = () => new AIError('Request cancelled by client.', 'ABORTED');
 
+// Setup hints help developers, but must not tell end users how the server is configured.
+export const misconfigured = (devHint: string, code: 'AUTH' | 'CONFIG', cause?: unknown) =>
+  new AIError(env.NODE_ENV === 'production' ? 'The AI service is not configured correctly. Please try again later.' : devHint, code, cause);
+
 // Gemini wraps errors as JSON-in-JSON ({"error":{"message":"{\n \"error\": {...}}"}}); unwrap to the readable message.
 export function errorSummary(error: unknown, maxLength = 200): string {
   let message = error instanceof Error ? error.message : String(error);
@@ -63,11 +67,14 @@ export function toAIError(error: unknown): AIError {
 
   if (error instanceof ApiError) {
     if (error.status === 401 || error.status === 403 || /API key not valid|API_KEY_INVALID/i.test(raw)) {
-      return new AIError('Gemini rejected the API key. Check GEMINI_API_KEY in backend/.env.', 'AUTH', error);
+      return misconfigured('Gemini rejected the API key. Check GEMINI_API_KEY in backend/.env.', 'AUTH', error);
     }
     if (error.status === 429) return new AIError('Gemini API quota exceeded. Try again later.', 'QUOTA', error);
     if (error.status === 404) {
-      return new AIError('None of the configured Gemini models are available. Check GEMINI_MODELS.', 'UNAVAILABLE', error);
+      const message = env.NODE_ENV === 'production'
+        ? 'The AI service is temporarily unavailable. Please try again later.'
+        : 'None of the configured Gemini models are available. Check GEMINI_MODELS.';
+      return new AIError(message, 'UNAVAILABLE', error);
     }
     if (error.status >= 500) return new AIError('Gemini is temporarily unavailable. Please try again.', 'UNAVAILABLE', error);
   }

@@ -352,3 +352,21 @@ describe('timeouts', () => {
     expect(models.generateContentStream.mock.calls[0][0].config.httpOptions).toEqual({ timeout: env.LLM_STREAM_TIMEOUT_MS });
   });
 });
+
+describe('error messages', () => {
+  it('hides configuration details from users in production', async () => {
+    const original = env.NODE_ENV;
+    models.generateContent.mockRejectedValue(new ApiError({ message: 'API key not valid', status: 400 }));
+    try {
+      env.NODE_ENV = 'production';
+      const prod = await generateStructured(PROMPT, schema, makeCtx()).catch(e => e);
+      expect(prod).toMatchObject({ code: 'AUTH', message: 'The AI service is not configured correctly. Please try again later.' });
+
+      env.NODE_ENV = 'development';
+      const dev = await generateStructured(PROMPT, schema, makeCtx()).catch(e => e);
+      expect(dev.message).toMatch(/GEMINI_API_KEY/);
+    } finally {
+      env.NODE_ENV = original;
+    }
+  });
+});

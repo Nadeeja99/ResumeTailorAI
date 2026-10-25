@@ -113,7 +113,7 @@ export function OptimizerTab(props: OptimizerTabProps) {
       </div>
 
       <div ref={resultsRef} className="scroll-mt-20 space-y-8">
-        {analysisTask.status === 'error' && analysisTask.error && !heuristic && (
+        {analysisTask.status === 'error' && analysisTask.error && !heuristic && !isUsageLimitError(analysisTask.error) && (
           <RequestError error={analysisTask.error} onRetry={handleAnalyze} telemetry={analysisTask.telemetry} />
         )}
 

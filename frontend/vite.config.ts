@@ -2,9 +2,21 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react-swc";
 import path from "path";
+import { readFileSync } from "fs";
+
+// `vite preview` serves the production build with the exact security headers nginx sends
+// (single source of truth), so the Playwright suite runs under the production CSP.
+const productionHeaders = Object.fromEntries(
+  [...readFileSync(path.resolve(import.meta.dirname, "nginx/security-headers.conf"), "utf8").matchAll(/^add_header (\S+) "([^"]+)" always;/gm)].map(
+    m => [m[1], m[2]]
+  )
+);
 
 // https://vitejs.dev/config/
 export default defineConfig({
+  preview: {
+    headers: productionHeaders,
+  },
   server: {
     host: "::",
     port: 8080,
@@ -55,6 +67,8 @@ export default defineConfig({
     },
   },
   test: {
+    // Playwright specs live in e2e/ and run separately (npm run test:e2e)
+    include: ["src/**/*.test.{ts,tsx}"],
     environment: "jsdom",
     setupFiles: ["./src/test/setup.ts"],
     css: false,

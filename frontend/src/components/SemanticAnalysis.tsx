@@ -121,7 +121,10 @@ export default function SemanticAnalysis({ resume, jobDescription, onUpgradeClic
         </CardHeader>
       </Card>
 
-      {task.status === 'error' && task.error && <RequestError error={task.error} onRetry={run} telemetry={task.telemetry} />}
+      {/* Usage-limit errors are shown by the pricing dialog instead */}
+      {task.status === 'error' && task.error && !isUsageLimitError(task.error) && (
+        <RequestError error={task.error} onRetry={run} telemetry={task.telemetry} />
+      )}
       {task.isPending && <SemanticSkeleton />}
 
       {result && (

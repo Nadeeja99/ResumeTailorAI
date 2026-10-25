@@ -46,5 +46,8 @@
     "@google/genai": false,
     "protobufjs": false,
     "fsevents": false
+  },
+  "engines": {
+    "node": ">=22.12.0"
   }
 }

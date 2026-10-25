@@ -2,7 +2,7 @@ import { GoogleGenAI, ApiError, type GenerateContentConfig, type GenerateContent
 import { env } from '../../config/env.js';
 import { logger } from '../../lib/logger.js';
 import type { PromptParts } from '../../prompts/index.js';
-import { AIError, aborted, toAIError } from './errors.js';
+import { AIError, aborted, misconfigured, toAIError } from './errors.js';
 import type { ResponseMeta, TelemetryTracker } from './telemetry.js';
 import type { ThinkingLevelName } from './thinking.js';
 
@@ -15,7 +15,7 @@ export interface CallContext {
 let client: GoogleGenAI | null = null;
 
 export function getClient(): GoogleGenAI {
-  if (!env.GEMINI_API_KEY) throw new AIError('GEMINI_API_KEY is not set in backend/.env', 'CONFIG');
+  if (!env.GEMINI_API_KEY) throw misconfigured('GEMINI_API_KEY is not set in backend/.env', 'CONFIG');
   // Timeouts are set per call (request/response vs. streaming need different limits)
   client ??= new GoogleGenAI({ apiKey: env.GEMINI_API_KEY });
   return client;
