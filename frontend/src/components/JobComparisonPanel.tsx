@@ -11,7 +11,9 @@ import { SUBMIT_SHORTCUT_LABEL, useSubmitShortcut } from '@/hooks/useSubmitShort
 import { compareJobs, type JobComparisonResult } from '@/services/resumeApi';
 import { isValidLength, LIMITS } from '@/lib/limits';
 import { ComparisonResultCard } from '@/components/compare/ComparisonResultCard';
-import { Plus, Trash2, BarChart2, Loader2 } from 'lucide-react';
+import { Plus, Trash2, BarChart2 } from 'lucide-react';
+import { CancelButton } from '@/components/ai/CancelButton';
+import { TelemetryDrawer } from '@/components/ai/telemetry/TelemetryDrawer';
 
 interface JobEntry {
   id: string;
@@ -104,9 +106,7 @@ export const JobComparisonPanel = ({ resume }: JobComparisonPanelProps) => {
               <Plus /> Add job
             </Button>
             {task.isPending ? (
-              <Button variant="outline" onClick={task.abort} className="sm:ml-auto">
-                <Loader2 className="animate-spin" /> Cancel
-              </Button>
+              <CancelButton startedAt={task.startedAt} onCancel={task.abort} className="sm:ml-auto" />
             ) : (
               <Button onClick={compare} disabled={!canCompare} className="sm:ml-auto">
                 <BarChart2 /> Compare {validJobs.length > 1 ? `${validJobs.length} jobs` : ''}
@@ -116,7 +116,7 @@ export const JobComparisonPanel = ({ resume }: JobComparisonPanelProps) => {
               </Button>
             )}
           </div>
-          {task.status === 'error' && task.error && <RequestError error={task.error} onRetry={compare} />}
+          {task.status === 'error' && task.error && <RequestError error={task.error} onRetry={compare} telemetry={task.telemetry} />}
         </CardContent>
       </Card>
 
@@ -147,6 +147,8 @@ export const JobComparisonPanel = ({ resume }: JobComparisonPanelProps) => {
           </CardContent>
         </Card>
       )}
+
+      {results.length > 0 && <TelemetryDrawer telemetry={task.telemetry} timing={task.timing} />}
     </div>
   );
 };

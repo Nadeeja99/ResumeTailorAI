@@ -1,30 +1,39 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { FileText, GitCompare } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { RequestError } from '@/components/common/RequestError';
+import { StreamControls } from '@/components/ai/StreamControls';
+import { TelemetryDrawer } from '@/components/ai/telemetry/TelemetryDrawer';
 import { ResumeDiff } from '@/components/ResumeDiff';
 import { ResumePreview } from '@/components/ResumePreview';
-import type { AIStatus } from '@/hooks/useAI';
+import type { useAIStream } from '@/hooks/useAI';
+import { markdownToPlainText } from '@/lib/markdownBlocks';
 
 interface GeneratedResumeProps {
   original: string;
-  text: string;
-  status: AIStatus;
-  error: Error | null;
+  stream: ReturnType<typeof useAIStream>;
   suggestions: string[];
   onRetry: () => void;
 }
 
-/** Streamed tailored resume with preview / changes tabs. Falls back to the original when nothing was generated. */
-export function GeneratedResume({ original, text, status, error, suggestions, onRetry }: GeneratedResumeProps) {
+/** Streamed tailored resume (Markdown) with preview / changes tabs. Shows the original until something is generated. */
+export function GeneratedResume({ original, stream, suggestions, onRetry }: GeneratedResumeProps) {
   const [tab, setTab] = useState('preview');
-  const streaming = status === 'loading' || status === 'streaming';
-  const finished = Boolean(text) && !streaming;
+  const { text, status, error } = stream;
+  const finished = Boolean(text) && !stream.isPending;
+  // Diff readable text, not Markdown syntax, against the user's plain-text original
+  const plainRewrite = useMemo(() => (finished ? markdownToPlainText(text) : ''), [finished, text]);
 
-  if (!text && !streaming) {
+  // Telemetry goes under the error only when there is no preview (the preview footer shows it otherwise)
+  const errorBanner = (withTelemetry: boolean) =>
+    status === 'error' && error && (
+      <RequestError error={error} onRetry={onRetry} telemetry={withTelemetry ? stream.telemetry : null} />
+    );
+
+  if (!text && !stream.isPending) {
     return (
       <div className="space-y-4">
-        {status === 'error' && error && <RequestError error={error} onRetry={onRetry} />}
+        {errorBanner(true)}
         <ResumePreview resume={original} />
       </div>
     );
@@ -32,10 +41,7 @@ export function GeneratedResume({ original, text, status, error, suggestions, on
 
   return (
     <div className="space-y-4">
-      {status === 'error' && error && <RequestError error={error} onRetry={onRetry} />}
-      {status === 'aborted' && (
-        <p className="text-sm text-muted-foreground">Generation stopped — showing the partial result.</p>
-      )}
+      {errorBanner(false)}
       <Tabs value={finished ? tab : 'preview'} onValueChange={setTab}>
         <TabsList className="mb-4">
           <TabsTrigger value="preview" className="gap-2">
@@ -48,11 +54,27 @@ export function GeneratedResume({ original, text, status, error, suggestions, on
           )}
         </TabsList>
         <TabsContent value="preview">
-          <ResumePreview resume={text} isStreaming={streaming} suggestions={status === 'success' ? suggestions : []} />
+          <ResumePreview
+            resume={text}
+            format="markdown"
+            isStreaming={stream.isPending}
+            suggestions={status === 'success' ? suggestions : []}
+            status={
+              <StreamControls
+                status={status}
+                startedAt={stream.startedAt}
+                firstChunkAt={stream.firstChunkAt}
+                chars={text.length}
+                timing={stream.timing}
+                onStop={stream.abort}
+              />
+            }
+            footer={<TelemetryDrawer telemetry={stream.telemetry} timing={stream.timing} />}
+          />
         </TabsContent>
         {finished && (
           <TabsContent value="diff">
-            <ResumeDiff original={original} improved={text} />
+            <ResumeDiff original={original} improved={plainRewrite} />
           </TabsContent>
         )}
       </Tabs>

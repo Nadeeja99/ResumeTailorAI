@@ -22,6 +22,11 @@ export default defineConfig({
     },
   },
   plugins: [react()],
+  // Pre-bundle libraries that are only imported lazily. Otherwise the dev server discovers them on
+  // first use, re-optimizes, and force-reloads the page — wiping in-progress input and streams.
+  optimizeDeps: {
+    include: ['react-markdown', 'remark-gfm', 'prism-react-renderer', 'pdfjs-dist', 'mammoth', 'jspdf', 'html2canvas', 'docx'],
+  },
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),

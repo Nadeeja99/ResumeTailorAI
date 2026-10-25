@@ -3,6 +3,7 @@ import {
   BookOpen, Brain, Briefcase, ChevronDown, Lightbulb, MessageSquare, Users, Zap, type LucideIcon,
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
+import { Markdown } from '@/components/ai/Markdown';
 import { DIFFICULTY_TONE } from '@/lib/score';
 import { cn } from '@/lib/utils';
 import type { InterviewQuestion } from '@/services/resumeApi';
@@ -72,7 +73,9 @@ export function QuestionCard({ q, index, visible }: QuestionCardProps) {
             <h4 className="mb-2 flex items-center gap-1.5 text-xs font-medium uppercase tracking-wide text-muted-foreground">
               <BookOpen className="h-3.5 w-3.5" aria-hidden /> Ideal answer
             </h4>
-            <p className="rounded-md bg-muted/50 p-4 text-sm leading-relaxed">{q.idealAnswer}</p>
+            <div className="rounded-md bg-muted/50 p-4">
+              <Markdown content={q.idealAnswer} />
+            </div>
           </div>
 
           {q.tips.length > 0 && (

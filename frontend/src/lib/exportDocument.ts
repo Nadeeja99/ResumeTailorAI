@@ -69,3 +69,33 @@ export async function exportTextToDocx(text: string, filename: string, { structu
   const doc = new Document({ sections: [{ properties: {}, children: paragraphs }] });
   downloadBlob(await Packer.toBlob(doc), filename);
 }
+
+/** Writes the resume prompt's Markdown to .docx with real Word headings, bullets and emphasis. */
+export async function exportMarkdownToDocx(markdown: string, filename: string): Promise<void> {
+  const [{ Document, HeadingLevel, Packer, Paragraph, TextRun }, { parseMarkdownBlocks }] = await Promise.all([
+    import('docx'),
+    import('./markdownBlocks'),
+  ]);
+
+  const HEADINGS = { h1: HeadingLevel.TITLE, h2: HeadingLevel.HEADING_2, h3: HeadingLevel.HEADING_3 } as const;
+
+  const paragraphs = parseMarkdownBlocks(markdown).map(block => {
+    const children = block.runs.map(
+      run =>
+        new TextRun({
+          text: run.text,
+          bold: run.bold,
+          italics: run.italic,
+          font: run.code || block.kind === 'code' ? 'Consolas' : undefined,
+          size: 22,
+        })
+    );
+    if (block.kind === 'h1' || block.kind === 'h2' || block.kind === 'h3') {
+      return new Paragraph({ children, heading: HEADINGS[block.kind], spacing: { before: block.kind === 'h1' ? 0 : 240, after: 120 } });
+    }
+    return new Paragraph({ children, bullet: block.kind === 'bullet' ? { level: 0 } : undefined, spacing: { after: 80 } });
+  });
+
+  const doc = new Document({ sections: [{ properties: {}, children: paragraphs }] });
+  downloadBlob(await Packer.toBlob(doc), filename);
+}

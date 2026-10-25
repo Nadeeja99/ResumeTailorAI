@@ -24,9 +24,32 @@ export function isUsageLimitError(error: unknown): boolean {
   return error instanceof ApiError && (error.code === 'USAGE_LIMIT_REACHED' || error.status === 402);
 }
 
+// Telemetry is diagnostic — a partial payload (e.g. frontend/backend version skew) must never break the result UI.
+export function normalizeTelemetry(raw: Partial<AITelemetry> | null | undefined): AITelemetry | null {
+  if (!raw || typeof raw !== 'object') return null;
+  return {
+    requestId: raw.requestId ?? 'unknown',
+    operation: raw.operation ?? 'unknown',
+    promptVersion: raw.promptVersion ?? 'unknown',
+    model: raw.model ?? null,
+    modelVersion: raw.modelVersion ?? null,
+    attempts: Array.isArray(raw.attempts) ? raw.attempts : [],
+    calls: raw.calls ?? 0,
+    ttftMs: raw.ttftMs ?? null,
+    totalMs: raw.totalMs ?? 0,
+    usage: raw.usage ?? null,
+    finishReason: raw.finishReason ?? null,
+    schema: raw.schema ?? null,
+    context: Array.isArray(raw.context) ? raw.context : [],
+    embeddings: raw.embeddings ?? null,
+    thinkingLevel: raw.thinkingLevel ?? null,
+    prompts: raw.prompts,
+  };
+}
+
 async function readError(res: Response): Promise<ApiError> {
   const body = (await res.json().catch(() => ({}))) as { error?: string; code?: string; telemetry?: AITelemetry };
-  return new ApiError(body.error || `Request failed (${res.status})`, res.status, body.code, body.telemetry ?? null);
+  return new ApiError(body.error || `Request failed (${res.status})`, res.status, body.code, normalizeTelemetry(body.telemetry));
 }
 
 const since = (start: number) => Math.round(performance.now() - start);
@@ -47,7 +70,7 @@ export async function postAI<T>(path: string, body: unknown, { signal }: Request
   const ttfbMs = since(start);
   if (!res.ok) throw await readError(res);
   const { data, telemetry } = (await res.json()) as AIResponse<T>;
-  return { data, telemetry, timing: { ttfbMs, ttftMs: null, totalMs: since(start) } };
+  return { data, telemetry: normalizeTelemetry(telemetry), timing: { ttfbMs, ttftMs: null, totalMs: since(start) } };
 }
 
 /** SSE v2 endpoint (meta → chunk* → done | error), calling onChunk for every piece of text. */
@@ -91,9 +114,9 @@ export async function streamAI(
         text += event.text;
         onChunk(event.text);
       } else if (event.type === 'done') {
-        return { data: text, telemetry: event.telemetry, timing: { ttfbMs, ttftMs, totalMs: since(start) } };
+        return { data: text, telemetry: normalizeTelemetry(event.telemetry), timing: { ttfbMs, ttftMs, totalMs: since(start) } };
       } else if (event.type === 'error') {
-        throw new ApiError(event.error, 502, event.code, event.telemetry);
+        throw new ApiError(event.error, 502, event.code, normalizeTelemetry(event.telemetry));
       }
     }
   }

@@ -22,6 +22,7 @@ vi.mock('@google/genai', async importOriginal => ({
   },
 }));
 
+const PROMPT = { system: 'You are a test system prompt.', user: 'prompt' };
 const schema = z.object({ score: z.number().int().min(0).max(100), tags: z.array(z.string()) });
 
 const usage = (prompt: number, output: number) => ({
@@ -51,7 +52,7 @@ describe('generateStructured', () => {
     models.generateContent.mockResolvedValueOnce(reply('{"score": 80, "tags": ["a"]}'));
     const ctx = makeCtx();
 
-    await expect(generateStructured('prompt', schema, ctx)).resolves.toEqual({ score: 80, tags: ['a'] });
+    await expect(generateStructured(PROMPT, schema, ctx)).resolves.toEqual({ score: 80, tags: ['a'] });
 
     const config = models.generateContent.mock.calls[0][0].config;
     expect(config.responseMimeType).toBe('application/json');
@@ -72,7 +73,7 @@ describe('generateStructured', () => {
       .mockResolvedValueOnce(reply('{"score": 100, "tags": ["a"]}'));
     const ctx = makeCtx();
 
-    await expect(generateStructured('prompt', schema, ctx)).resolves.toEqual({ score: 100, tags: ['a'] });
+    await expect(generateStructured(PROMPT, schema, ctx)).resolves.toEqual({ score: 100, tags: ['a'] });
 
     const repairPrompt: string = models.generateContent.mock.calls[1][0].contents;
     expect(repairPrompt).toContain('score:');
@@ -84,7 +85,7 @@ describe('generateStructured', () => {
     models.generateContent.mockResolvedValue(reply('not json'));
     const ctx = makeCtx();
 
-    await expect(generateStructured('prompt', schema, ctx)).rejects.toMatchObject({ code: 'INVALID_OUTPUT', status: 502 });
+    await expect(generateStructured(PROMPT, schema, ctx)).rejects.toMatchObject({ code: 'INVALID_OUTPUT', status: 502 });
     expect(ctx.tracker.snapshot().schema).toBe('failed');
   });
 
@@ -94,7 +95,7 @@ describe('generateStructured', () => {
       .mockResolvedValueOnce(reply('{"score": 50, "tags": []}'));
     const ctx = makeCtx();
 
-    await generateStructured('prompt', schema, ctx);
+    await generateStructured(PROMPT, schema, ctx);
 
     const used = models.generateContent.mock.calls.map(c => c[0].model);
     expect(used).toEqual(env.GEMINI_MODELS.slice(0, 2));
@@ -113,7 +114,7 @@ describe('generateStructured', () => {
       .mockResolvedValueOnce(reply('{"score": 50, "tags": []}'));
     const ctx = makeCtx();
 
-    await generateStructured('prompt', schema, ctx);
+    await generateStructured(PROMPT, schema, ctx);
 
     expect(ctx.tracker.snapshot().attempts[0]).toEqual({
       model: env.GEMINI_MODELS[0],
@@ -126,7 +127,7 @@ describe('generateStructured', () => {
   it('does not fall back on auth errors', async () => {
     models.generateContent.mockRejectedValue(new ApiError({ message: 'API key not valid', status: 400 }));
 
-    await expect(generateStructured('prompt', schema, makeCtx())).rejects.toMatchObject({ code: 'AUTH' });
+    await expect(generateStructured(PROMPT, schema, makeCtx())).rejects.toMatchObject({ code: 'AUTH' });
     expect(models.generateContent).toHaveBeenCalledTimes(1);
   });
 
@@ -134,7 +135,7 @@ describe('generateStructured', () => {
     const controller = new AbortController();
     controller.abort();
 
-    await expect(generateStructured('prompt', schema, makeCtx(controller.signal))).rejects.toMatchObject({ code: 'ABORTED' });
+    await expect(generateStructured(PROMPT, schema, makeCtx(controller.signal))).rejects.toMatchObject({ code: 'ABORTED' });
     expect(models.generateContent).not.toHaveBeenCalled();
   });
 
@@ -143,7 +144,7 @@ describe('generateStructured', () => {
     models.generateContent.mockResolvedValueOnce(reply('{"score": 1, "tags": []}'));
     const ctx = makeCtx();
 
-    await generateStructured('secret resume', schema, ctx);
+    await generateStructured({ system: 'sys', user: 'secret resume' }, schema, ctx);
 
     expect(ctx.tracker.snapshot()).not.toHaveProperty('prompts');
   });
@@ -159,7 +160,7 @@ describe('streamText', () => {
     );
     const ctx = makeCtx();
 
-    await expect(collect(streamText('prompt', ctx))).resolves.toEqual(['Hello', ' world']);
+    await expect(collect(streamText(PROMPT, ctx))).resolves.toEqual(['Hello', ' world']);
 
     const t = ctx.tracker.snapshot();
     expect(t.ttftMs).not.toBeNull();
@@ -174,7 +175,7 @@ describe('streamText', () => {
       })()
     );
 
-    await expect(collect(streamText('prompt', makeCtx()))).rejects.toMatchObject({ code: 'BLOCKED' });
+    await expect(collect(streamText(PROMPT, makeCtx()))).rejects.toMatchObject({ code: 'BLOCKED' });
   });
 
   it('maps a mid-stream abort to ABORTED', async () => {
@@ -187,34 +188,167 @@ describe('streamText', () => {
       })()
     );
 
-    const error = await collect(streamText('prompt', makeCtx(controller.signal))).catch(e => e);
+    const error = await collect(streamText(PROMPT, makeCtx(controller.signal))).catch(e => e);
     expect(error).toBeInstanceOf(AIError);
     expect(error.code).toBe('ABORTED');
   });
 });
 
-describe('semanticAnalysis', () => {
-  it('uses two batched embedding calls and returns inspectable chunks', async () => {
-    models.generateContent.mockResolvedValueOnce(reply('{"requirements": ["React", "Docker"]}'));
-    // [JD, experience, skills] then [React, Docker]
-    models.embedContent
-      .mockResolvedValueOnce({ embeddings: [{ values: [1, 0] }, { values: [0.9, 0.1] }, { values: [0.6, 0.8] }] })
-      .mockResolvedValueOnce({ embeddings: [{ values: [1, 0] }, { values: [0, 1] }] });
+describe('prompt plumbing and thinking levels', () => {
+  it('sends the system instruction separately and records both parts in telemetry', async () => {
+    models.generateContent.mockResolvedValueOnce(reply('{"score": 10, "tags": []}'));
     const ctx = makeCtx();
 
-    const resume = 'Experience\nBuilt React apps for five years at Acme.\nSkills\nTypeScript, Docker, Kubernetes, AWS.';
-    const result = await semanticAnalysis(resume, 'Senior engineer with React and Docker experience', ctx);
+    await generateStructured(PROMPT, schema, ctx);
 
+    const call = models.generateContent.mock.calls[0][0];
+    expect(call.contents).toBe('prompt');
+    expect(call.config.systemInstruction).toBe(PROMPT.system);
+    expect(ctx.tracker.snapshot().prompts).toEqual([{ system: PROMPT.system, user: 'prompt' }]);
+  });
+
+  it('applies the operation thinking level', async () => {
+    models.generateContent.mockResolvedValueOnce(reply('{"score": 10, "tags": []}'));
+
+    await generateStructured(PROMPT, schema, { ...makeCtx(), thinkingLevel: 'LOW' });
+
+    expect(models.generateContent.mock.calls[0][0].config.thinkingConfig).toEqual({ thinkingLevel: 'LOW' });
+  });
+
+  it('retries the same model without thinking when the level is unsupported', async () => {
+    models.generateContent
+      .mockRejectedValueOnce(new ApiError({ message: 'Thinking level MINIMAL is not supported for this model.', status: 400 }))
+      .mockResolvedValueOnce(reply('{"score": 10, "tags": []}'));
+    const tracker = new TelemetryTracker({ requestId: 'r', operation: 'test', context: {}, thinkingLevel: 'MINIMAL' });
+
+    await generateStructured(PROMPT, schema, { tracker, signal: new AbortController().signal, thinkingLevel: 'MINIMAL' });
+
+    const [first, second] = models.generateContent.mock.calls.map(c => c[0]);
+    expect(first.model).toBe(second.model);
+    expect(first.config.thinkingConfig).toBeDefined();
+    expect(second.config.thinkingConfig).toBeUndefined();
+    expect(tracker.snapshot().thinkingLevel).toBe(`MINIMAL → default (unsupported by ${env.GEMINI_MODELS[0]})`);
+    expect(tracker.snapshot().attempts).toEqual([{ model: env.GEMINI_MODELS[0], ok: true }]);
+  });
+
+  it('does not swallow unrelated 400s', async () => {
+    models.generateContent.mockRejectedValue(new ApiError({ message: 'Invalid JSON payload', status: 400 }));
+
+    await expect(generateStructured(PROMPT, schema, { ...makeCtx(), thinkingLevel: 'LOW' })).rejects.toMatchObject({ code: 'UPSTREAM' });
+    expect(models.generateContent).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('semanticAnalysis', () => {
+  // Toy embedding: one dimension per concept, so similarities are predictable
+  const CONCEPTS = ['react', 'docker', 'mentor'];
+  const embed = (text: string) => [...CONCEPTS.map(c => (text.toLowerCase().includes(c) ? 1 : 0)), 0.1];
+
+  it('matches requirements against individual resume lines and returns evidence', async () => {
+    models.generateContent.mockResolvedValueOnce(reply('{"requirements": ["React", "Mentoring", "Docker"]}'));
+    models.embedContent.mockImplementation(async ({ contents }: { contents: { parts: { text: string }[] }[] }) => ({
+      embeddings: contents.map(c => ({ values: embed(c.parts[0].text) })),
+    }));
+    const ctx = makeCtx();
+
+    const resume = [
+      'Experience',
+      '- Built React apps for five years at Acme Corp',
+      '- Mentored four junior engineers through promotion',
+      'Skills',
+      'TypeScript, GraphQL, Jest, CI/CD pipelines',
+    ].join('\n');
+    const result = await semanticAnalysis(resume, 'Senior engineer: React, Docker and mentoring', ctx);
+
+    // One batch for JD + sections + evidence lines, one for requirements
     expect(models.embedContent).toHaveBeenCalledTimes(2);
     const firstBatch = models.embedContent.mock.calls[0][0].contents;
-    expect(firstBatch).toHaveLength(3);
-    expect(firstBatch[0]).toEqual({ role: 'user', parts: [{ text: 'Senior engineer with React and Docker experience' }] });
+    expect(firstBatch[0]).toEqual({ role: 'user', parts: [{ text: 'Senior engineer: React, Docker and mentoring' }] });
+    expect(result.evidenceChunks).toBe(3);
     expect(result.sections.map(s => s.name)).toEqual(['Experience', 'Skills']);
-    expect(result.sections[0]).toMatchObject({ rawSimilarity: 0.994, score: 100 });
-    expect(result.requirementCoverage).toEqual([
-      expect.objectContaining({ requirement: 'React', bestSection: 'Experience', covered: true }),
-      expect.objectContaining({ requirement: 'Docker', bestSection: 'Skills', covered: true }),
+
+    const byReq = Object.fromEntries(result.requirementCoverage.map(r => [r.requirement, r]));
+    expect(byReq.React).toMatchObject({ covered: true, bestSection: 'Experience', evidence: 'Built React apps for five years at Acme Corp' });
+    expect(byReq.Mentoring).toMatchObject({ covered: true, evidence: 'Mentored four junior engineers through promotion' });
+    expect(byReq.Docker.covered).toBe(false);
+    expect(result.topGaps).toEqual(['Docker']);
+    expect(result.calibration).toMatchObject({ model: env.EMBEDDING_MODEL, coveredThreshold: 50 });
+    expect(ctx.tracker.snapshot().embeddings).toEqual({ model: env.EMBEDDING_MODEL, calls: 2, inputs: firstBatch.length + 3 });
+  });
+});
+
+describe('timeouts', () => {
+  const abortError = () => Object.assign(new Error('This operation was aborted'), { name: 'AbortError' });
+  // A stream that never yields — like a queued model — and rejects once its signal aborts.
+  const hangingStream = (signal: AbortSignal) =>
+    (async function* () {
+      await new Promise((_, reject) => signal.addEventListener('abort', () => reject(abortError()), { once: true }));
+      yield { text: 'never' };
+    })();
+
+  it('falls back to the next model when a request/response call times out', async () => {
+    models.generateContent.mockRejectedValueOnce(abortError()).mockResolvedValueOnce(reply('{"score": 1, "tags": []}'));
+    const ctx = makeCtx();
+
+    await generateStructured(PROMPT, schema, ctx);
+
+    expect(ctx.tracker.snapshot().attempts).toEqual([
+      { model: env.GEMINI_MODELS[0], ok: false, error: 'timed out' },
+      { model: env.GEMINI_MODELS[1], ok: true },
     ]);
-    expect(ctx.tracker.snapshot().embeddings).toEqual({ model: env.EMBEDDING_MODEL, calls: 2, inputs: 5 });
+  });
+
+  it('abandons a stream that produces no first token and falls back', async () => {
+    const original = env.LLM_FIRST_TOKEN_TIMEOUT_MS;
+    env.LLM_FIRST_TOKEN_TIMEOUT_MS = 30;
+    try {
+      models.generateContentStream
+        .mockImplementationOnce(async ({ config }: { config: { abortSignal: AbortSignal } }) => hangingStream(config.abortSignal))
+        .mockResolvedValueOnce((async function* () { yield { text: 'from fallback' }; })());
+      const ctx = makeCtx();
+
+      await expect(collect(streamText(PROMPT, ctx))).resolves.toEqual(['from fallback']);
+      expect(ctx.tracker.snapshot().attempts.map(a => a.ok)).toEqual([false, true]);
+    } finally {
+      env.LLM_FIRST_TOKEN_TIMEOUT_MS = original;
+    }
+  });
+
+  it('does not time out a stream that pauses after its first token', async () => {
+    const original = env.LLM_FIRST_TOKEN_TIMEOUT_MS;
+    env.LLM_FIRST_TOKEN_TIMEOUT_MS = 30;
+    try {
+      models.generateContentStream.mockResolvedValueOnce(
+        (async function* () {
+          yield { text: 'first ' };
+          await new Promise(r => setTimeout(r, 80)); // longer than the first-token deadline
+          yield { text: 'second' };
+        })()
+      );
+      const ctx = makeCtx();
+
+      await expect(collect(streamText(PROMPT, ctx))).resolves.toEqual(['first ', 'second']);
+      expect(ctx.tracker.snapshot().attempts).toHaveLength(1);
+    } finally {
+      env.LLM_FIRST_TOKEN_TIMEOUT_MS = original;
+    }
+  });
+
+  it('reports TIMEOUT when every model times out', async () => {
+    models.generateContent.mockRejectedValue(abortError());
+
+    await expect(generateStructured(PROMPT, schema, makeCtx())).rejects.toMatchObject({ code: 'TIMEOUT', status: 504 });
+    expect(models.generateContent).toHaveBeenCalledTimes(env.GEMINI_MODELS.length);
+  });
+
+  it('sets per-call timeouts: short for request/response, long for streams', async () => {
+    models.generateContent.mockResolvedValueOnce(reply('{"score": 1, "tags": []}'));
+    models.generateContentStream.mockResolvedValueOnce((async function* () { yield { text: 'x' }; })());
+
+    await generateStructured(PROMPT, schema, makeCtx());
+    await collect(streamText(PROMPT, makeCtx()));
+
+    expect(models.generateContent.mock.calls[0][0].config.httpOptions).toEqual({ timeout: env.LLM_TIMEOUT_MS });
+    expect(models.generateContentStream.mock.calls[0][0].config.httpOptions).toEqual({ timeout: env.LLM_STREAM_TIMEOUT_MS });
   });
 });

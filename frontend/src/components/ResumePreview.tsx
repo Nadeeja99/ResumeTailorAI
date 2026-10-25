@@ -1,15 +1,22 @@
-import { useRef, useState } from 'react';
+import { useRef, useState, type ReactNode } from 'react';
 import { Download, Eye, FileText, Loader2, RefreshCw } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/components/ui/use-toast';
-import { classifyLine, exportElementToPdf, exportTextToDocx } from '@/lib/exportDocument';
+import { Markdown } from '@/components/ai/Markdown';
+import { classifyLine, exportElementToPdf, exportMarkdownToDocx, exportTextToDocx } from '@/lib/exportDocument';
 
 interface ResumePreviewProps {
   resume: string;
+  /** `markdown` for AI rewrites (prompt v2); `plain` for the user's own resume text. */
+  format?: 'plain' | 'markdown';
   isStreaming?: boolean;
   suggestions?: string[];
+  /** Rendered in the card header, e.g. live stream controls. */
+  status?: ReactNode;
+  /** Rendered under the preview card, e.g. the telemetry drawer. */
+  footer?: ReactNode;
 }
 
 function ResumeLine({ line }: { line: string }) {
@@ -29,7 +36,7 @@ function ResumeLine({ line }: { line: string }) {
   }
 }
 
-export const ResumePreview = ({ resume, isStreaming = false, suggestions = [] }: ResumePreviewProps) => {
+export const ResumePreview = ({ resume, format = 'plain', isStreaming = false, suggestions = [], status, footer }: ResumePreviewProps) => {
   const paperRef = useRef<HTMLDivElement>(null);
   const [exporting, setExporting] = useState<'pdf' | 'docx' | null>(null);
   const { toast } = useToast();
@@ -38,7 +45,11 @@ export const ResumePreview = ({ resume, isStreaming = false, suggestions = [] }:
     setExporting(kind);
     try {
       if (kind === 'pdf' && paperRef.current) await exportElementToPdf(paperRef.current, 'tailored-resume.pdf');
-      if (kind === 'docx') await exportTextToDocx(resume, 'tailored-resume.docx', { structured: true });
+      if (kind === 'docx') {
+        await (format === 'markdown'
+          ? exportMarkdownToDocx(resume, 'tailored-resume.docx')
+          : exportTextToDocx(resume, 'tailored-resume.docx', { structured: true }));
+      }
       toast({ title: 'Downloaded', description: `Resume saved as ${kind === 'pdf' ? 'PDF' : 'Word document'}.` });
     } catch {
       toast({ title: 'Export failed', description: 'Could not create the file. Please try again.', variant: 'destructive' });
@@ -55,12 +66,8 @@ export const ResumePreview = ({ resume, isStreaming = false, suggestions = [] }:
             <CardTitle className="flex items-center gap-2">
               <Eye className="h-4 w-4 text-muted-foreground" aria-hidden />
               Resume preview
-              {isStreaming && (
-                <span className="inline-flex items-center gap-1.5 rounded-md bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary">
-                  <RefreshCw className="h-3 w-3 animate-spin" aria-hidden /> Writing…
-                </span>
-              )}
             </CardTitle>
+            {status}
             {!isStreaming && (
               <div className="flex gap-2">
                 <Button onClick={() => download('pdf')} variant="outline" size="sm" disabled={!resume.trim() || !!exporting}>
@@ -84,9 +91,11 @@ export const ResumePreview = ({ resume, isStreaming = false, suggestions = [] }:
           >
             {resume ? (
               <div className="space-y-1">
-                {resume.split('\n').map((line, i) => (
-                  <ResumeLine key={i} line={line} />
-                ))}
+                {format === 'markdown' ? (
+                  <Markdown content={resume} variant="paper" />
+                ) : (
+                  resume.split('\n').map((line, i) => <ResumeLine key={i} line={line} />)
+                )}
                 {isStreaming && <span className="ml-0.5 inline-block h-4 w-0.5 animate-pulse bg-zinc-900 align-middle" />}
               </div>
             ) : (
@@ -98,6 +107,8 @@ export const ResumePreview = ({ resume, isStreaming = false, suggestions = [] }:
           </div>
         </CardContent>
       </Card>
+
+      {footer}
 
       {suggestions.length > 0 && (
         <Card>

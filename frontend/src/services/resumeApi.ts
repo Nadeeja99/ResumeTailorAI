@@ -84,6 +84,18 @@ export interface SemanticRequirement {
   score: number;
   rawSimilarity: number;
   bestSection: string;
+  /** Resume line that best supports (or fails to support) the requirement. */
+  evidence: string;
+  /** Distinctive requirement terms found in the resume (lexical half of hybrid matching). */
+  matchedTerms: string[];
+}
+
+export interface SemanticCalibration {
+  model: string;
+  floor: number;
+  range: number;
+  coveredThreshold: number;
+  strongSimilarity: number;
 }
 
 export interface SemanticAnalysisResult {
@@ -92,6 +104,8 @@ export interface SemanticAnalysisResult {
   requirementCoverage: SemanticRequirement[];
   topGaps: string[];
   embeddingModel: string;
+  calibration: SemanticCalibration;
+  evidenceChunks: number;
 }
 
 export function semanticAnalyze(

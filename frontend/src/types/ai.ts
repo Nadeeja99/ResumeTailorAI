@@ -29,7 +29,15 @@ export interface AITelemetry {
   schema: 'valid' | 'repaired' | 'failed' | null;
   context: { name: string; chars: number }[];
   embeddings: { model: string; calls: number; inputs: number } | null;
-  prompts?: string[];
+  /** Configured thinking level for this operation (null = model default). */
+  thinkingLevel: string | null;
+  /** Only present when the server runs with EXPOSE_PROMPTS. One entry per model call. */
+  prompts?: PromptRecord[];
+}
+
+export interface PromptRecord {
+  system: string | null;
+  user: string;
 }
 
 /** Wire format of JSON AI endpoints. */

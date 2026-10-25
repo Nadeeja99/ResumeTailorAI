@@ -1,6 +1,9 @@
-import { BrainCircuit, Check, Loader2, X } from 'lucide-react';
+import { BrainCircuit, Check, X } from 'lucide-react';
 import { isUsageLimitError, semanticAnalyze, type SemanticAnalysisResult } from '@/services/resumeApi';
 import { RequestError } from '@/components/common/RequestError';
+import { CancelButton } from '@/components/ai/CancelButton';
+import { TelemetryDrawer } from '@/components/ai/telemetry/TelemetryDrawer';
+import { ChunkInspector } from '@/components/semantic/ChunkInspector';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useAITask } from '@/hooks/useAI';
 import { Badge } from '@/components/ui/badge';
@@ -109,9 +112,7 @@ export default function SemanticAnalysis({ resume, jobDescription, onUpgradeClic
             </CardDescription>
           </div>
           {task.isPending ? (
-            <Button variant="outline" onClick={task.abort} className="shrink-0">
-              <Loader2 className="animate-spin" /> Cancel
-            </Button>
+            <CancelButton startedAt={task.startedAt} onCancel={task.abort} />
           ) : (
             <Button onClick={run} className="shrink-0">
               {result ? 'Run again' : 'Run analysis'}
@@ -120,7 +121,7 @@ export default function SemanticAnalysis({ resume, jobDescription, onUpgradeClic
         </CardHeader>
       </Card>
 
-      {task.status === 'error' && task.error && <RequestError error={task.error} onRetry={run} />}
+      {task.status === 'error' && task.error && <RequestError error={task.error} onRetry={run} telemetry={task.telemetry} />}
       {task.isPending && <SemanticSkeleton />}
 
       {result && (
@@ -172,6 +173,13 @@ export default function SemanticAnalysis({ resume, jobDescription, onUpgradeClic
             </Card>
           )}
         </div>
+      )}
+
+      {result && (
+        <>
+          <ChunkInspector result={result} />
+          <TelemetryDrawer telemetry={task.telemetry} timing={task.timing} />
+        </>
       )}
     </div>
   );

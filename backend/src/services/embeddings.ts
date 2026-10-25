@@ -4,12 +4,9 @@ import { jdRequirementsOutputSchema } from '../schemas/ai.js';
 import { getClient, type CallContext } from './llm/client.js';
 import { AIError, aborted, toAIError } from './llm/errors.js';
 import { generateStructured } from './llm/structured.js';
-
-// Cosine similarity for related text clusters roughly in [FLOOR, FLOOR + RANGE];
-// rescale that band to 0-100. Calibrated on text-embedding-004 — recheck when changing EMBEDDING_MODEL.
-const SIMILARITY_FLOOR = 0.5;
-const SIMILARITY_RANGE = 0.45;
-const COVERED_THRESHOLD = 50;
+import { calibrationFor, toScore, type Calibration } from './semantic/calibration.js';
+import { buildEvidenceChunks, extractResumeSections } from './semantic/chunking.js';
+import { keywordMatcher } from './semantic/lexical.js';
 
 async function embedMany(texts: string[], ctx: CallContext): Promise<number[][]> {
   if (texts.length === 0) return [];
@@ -42,44 +39,7 @@ function cosineSimilarity(a: number[], b: number[]): number {
   return denom === 0 ? 0 : dot / denom;
 }
 
-const toScore = (similarity: number) =>
-  Math.round(Math.min(100, Math.max(0, ((similarity - SIMILARITY_FLOOR) / SIMILARITY_RANGE) * 100)));
-
 const round3 = (n: number) => Math.round(n * 1000) / 1000;
-
-// Splits resume text into named sections heuristically
-function extractResumeSections(resume: string): Record<string, string> {
-  const SECTION_HEADERS = [
-    'summary', 'objective', 'profile',
-    'experience', 'work experience', 'employment',
-    'education', 'skills', 'technical skills',
-    'projects', 'certifications', 'achievements', 'awards',
-  ];
-
-  const lines = resume.split('\n');
-  const sections: Record<string, string[]> = { intro: [] };
-  let current = 'intro';
-
-  for (const line of lines) {
-    const lower = line.trim().toLowerCase();
-    const matched = SECTION_HEADERS.find(h => lower === h || lower.startsWith(h + ':') || lower.startsWith(h + ' '));
-    if (matched) {
-      current = matched.split(' ')[0]; // normalise to first word
-      sections[current] = sections[current] ?? [];
-    } else {
-      sections[current] = sections[current] ?? [];
-      sections[current].push(line);
-    }
-  }
-
-  const nonEmpty = Object.fromEntries(
-    Object.entries(sections)
-      .map(([k, v]) => [k, v.join('\n').trim()])
-      .filter(([, v]) => v.length > 20)
-  );
-  // No recognisable headings → score the resume as a single chunk
-  return Object.keys(nonEmpty).length > 0 ? nonEmpty : { resume: resume.trim() };
-}
 
 export interface SemanticSection {
   name: string;
@@ -96,6 +56,10 @@ export interface SemanticRequirement {
   score: number;
   rawSimilarity: number;
   bestSection: string;
+  /** The resume line that best supports (or fails to support) this requirement. */
+  evidence: string;
+  /** Distinctive requirement terms found anywhere in the resume (lexical half of hybrid matching). */
+  matchedTerms: string[];
 }
 
 export interface SemanticAnalysisResult {
@@ -104,6 +68,8 @@ export interface SemanticAnalysisResult {
   requirementCoverage: SemanticRequirement[];
   topGaps: string[];
   embeddingModel: string;
+  calibration: Calibration;
+  evidenceChunks: number;
 }
 
 export async function semanticAnalysis(
@@ -111,22 +77,27 @@ export async function semanticAnalysis(
   jobDescription: string,
   ctx: CallContext
 ): Promise<SemanticAnalysisResult> {
+  const calibration = calibrationFor(env.EMBEDDING_MODEL);
   const sections = extractResumeSections(resume);
   const sectionNames = Object.keys(sections);
+  const evidence = buildEvidenceChunks(sections);
 
-  // Two batched embedding calls total; requirement extraction runs alongside the first
-  const [[jdEmbedding, ...sectionEmbeddings], { requirements }] = await Promise.all([
-    embedMany([jobDescription, ...Object.values(sections)], ctx),
+  // Two batched embedding calls; requirement extraction runs alongside the first
+  const [vectors, { requirements }] = await Promise.all([
+    embedMany([jobDescription, ...Object.values(sections), ...evidence.map(e => e.text)], ctx),
     generateStructured(extractRequirementsPrompt(jobDescription), jdRequirementsOutputSchema, ctx),
   ]);
+  const [jdEmbedding, ...rest] = vectors;
+  const sectionEmbeddings = rest.slice(0, sectionNames.length);
+  const evidenceEmbeddings = rest.slice(sectionNames.length);
   const requirementEmbeddings = await embedMany(requirements, ctx);
 
   const sectionResults: SemanticSection[] = sectionNames.map((name, i) => {
     const similarity = cosineSimilarity(sectionEmbeddings[i], jdEmbedding);
     const text = sections[name];
     return {
-      name: name.charAt(0).toUpperCase() + name.slice(1),
-      score: toScore(similarity),
+      name,
+      score: toScore(similarity, calibration),
       rawSimilarity: round3(similarity),
       chars: text.length,
       excerpt: text.slice(0, 120) + (text.length > 120 ? '…' : ''),
@@ -134,21 +105,31 @@ export async function semanticAnalysis(
     };
   });
 
+  // Match each requirement against individual resume lines (falling back to whole sections)
+  const candidates = evidence.length > 0
+    ? evidence.map((e, i) => ({ section: e.section, text: e.text, vector: evidenceEmbeddings[i] }))
+    : sectionNames.map((name, i) => ({ section: name, text: sections[name], vector: sectionEmbeddings[i] }));
+
+  const matchTerms = keywordMatcher(resume);
   const requirementCoverage: SemanticRequirement[] = requirements.map((requirement, i) => {
-    // Score each requirement against its best-matching resume section
-    let best = -1;
-    let bestIndex = 0;
-    sectionEmbeddings.forEach((se, j) => {
-      const s = cosineSimilarity(se, requirementEmbeddings[i]);
-      if (s > best) [best, bestIndex] = [s, j];
-    });
-    const score = toScore(best);
+    let best = { similarity: -1, candidate: candidates[0] };
+    for (const candidate of candidates) {
+      const similarity = cosineSimilarity(candidate.vector, requirementEmbeddings[i]);
+      if (similarity > best.similarity) best = { similarity, candidate };
+    }
+    const score = toScore(best.similarity, calibration);
+    const matchedTerms = matchTerms(requirement);
+    // Hybrid rule: semantically close AND a distinctive term present — unless the semantic match alone is strong
+    const covered =
+      score >= calibration.coveredThreshold && (matchedTerms.length > 0 || best.similarity >= calibration.strongSimilarity);
     return {
       requirement,
-      covered: score >= COVERED_THRESHOLD,
+      covered,
+      matchedTerms,
       score,
-      rawSimilarity: round3(best),
-      bestSection: sectionResults[bestIndex].name,
+      rawSimilarity: round3(best.similarity),
+      bestSection: best.candidate.section,
+      evidence: best.candidate.text.slice(0, 300),
     };
   });
 
@@ -162,5 +143,13 @@ export async function semanticAnalysis(
     .slice(0, 5)
     .map(r => r.requirement);
 
-  return { overallScore, sections: sectionResults, requirementCoverage, topGaps, embeddingModel: env.EMBEDDING_MODEL };
+  return {
+    overallScore,
+    sections: sectionResults,
+    requirementCoverage,
+    topGaps,
+    embeddingModel: env.EMBEDDING_MODEL,
+    calibration,
+    evidenceChunks: evidence.length,
+  };
 }

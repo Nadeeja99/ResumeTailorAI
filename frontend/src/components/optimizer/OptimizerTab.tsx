@@ -1,8 +1,10 @@
 import { useRef, useState } from 'react';
-import { Info, Loader2, Sparkles, Square, Target } from 'lucide-react';
+import { Info, Sparkles, Square, Target } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/components/ui/use-toast';
 import { Kbd } from '@/components/common/Kbd';
+import { CancelButton } from '@/components/ai/CancelButton';
+import { TelemetryDrawer } from '@/components/ai/telemetry/TelemetryDrawer';
 import { RequestError } from '@/components/common/RequestError';
 import { AnalysisResults } from '@/components/AnalysisResults';
 import { JobDescriptionInput } from '@/components/JobDescriptionInput';
@@ -83,9 +85,7 @@ export function OptimizerTab(props: OptimizerTabProps) {
 
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
           {analysisTask.isPending ? (
-            <Button size="lg" variant="outline" onClick={analysisTask.abort} className="w-full sm:w-auto">
-              <Loader2 className="animate-spin" /> Cancel analysis
-            </Button>
+            <CancelButton size="lg" startedAt={analysisTask.startedAt} onCancel={analysisTask.abort} label="Cancel analysis" className="w-full sm:w-auto" />
           ) : (
             <Button onClick={handleAnalyze} disabled={!canAnalyze} size="lg" className="w-full sm:w-auto">
               <Target /> Analyze resume
@@ -114,7 +114,7 @@ export function OptimizerTab(props: OptimizerTabProps) {
 
       <div ref={resultsRef} className="scroll-mt-20 space-y-8">
         {analysisTask.status === 'error' && analysisTask.error && !heuristic && (
-          <RequestError error={analysisTask.error} onRetry={handleAnalyze} />
+          <RequestError error={analysisTask.error} onRetry={handleAnalyze} telemetry={analysisTask.telemetry} />
         )}
 
         {heuristic && (
@@ -135,11 +135,14 @@ export function OptimizerTab(props: OptimizerTabProps) {
         {analysis && !analysisTask.isPending && (
           <>
             <AnalysisResults analysis={analysis} isLoading={false} />
+            <TelemetryDrawer
+              telemetry={analysisTask.telemetry}
+              timing={analysisTask.timing}
+              source={heuristic ? 'heuristic' : 'model'}
+            />
             <GeneratedResume
               original={resume}
-              text={generation.text}
-              status={generation.status}
-              error={generation.error}
+              stream={generation}
               suggestions={analysis.suggestedImprovements}
               onRetry={handleGenerate}
             />

@@ -23,7 +23,12 @@ const envSchema = z
     // Tried in order; later models are used when earlier ones are unavailable or overloaded
     GEMINI_MODELS: csv('gemini-3.8-flash,gemini-3.6-flash,gemini-3.5-flash-lite'),
     EMBEDDING_MODEL: z.string().default('gemini-embedding-2'),
+    // Per model attempt for request/response calls; a timeout falls back to the next model
     LLM_TIMEOUT_MS: z.coerce.number().int().positive().default(90_000),
+    // Streams: abandon a model that hasn't produced its first chunk (safe to fall back — nothing shown yet)
+    LLM_FIRST_TOKEN_TIMEOUT_MS: z.coerce.number().int().positive().default(45_000),
+    // Streams: hard cap on a whole generation once tokens are flowing
+    LLM_STREAM_TIMEOUT_MS: z.coerce.number().int().positive().default(300_000),
     // Unset = model default. MINIMAL | LOW | MEDIUM | HIGH (Gemini 3.x)
     LLM_THINKING_LEVEL: z.enum(['MINIMAL', 'LOW', 'MEDIUM', 'HIGH']).optional(),
     // Raw prompts contain user resumes and prompt IP — default on only outside production

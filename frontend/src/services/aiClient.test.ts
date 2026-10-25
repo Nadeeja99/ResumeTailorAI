@@ -29,7 +29,7 @@ describe('streamAI (SSE v2)', () => {
     const result = await streamAI('/generate-improved', {}, onChunk);
 
     expect(result.data).toBe('Hello world');
-    expect(result.telemetry).toEqual(TELEMETRY);
+    expect(result.telemetry).toMatchObject(TELEMETRY);
     expect(onChunk.mock.calls.map(c => c[0])).toEqual(['Hello', ' world']);
     expect(result.timing.ttftMs).not.toBeNull();
     expect(result.timing.ttfbMs).toBeLessThanOrEqual(result.timing.ttftMs!);
@@ -48,6 +48,7 @@ describe('streamAI (SSE v2)', () => {
     const error = await streamAI('/x', {}, () => {}).catch(e => e);
     expect(error).toBeInstanceOf(ApiError);
     expect(error).toMatchObject({ message: 'quota exceeded', code: 'QUOTA', telemetry: TELEMETRY });
+    expect(error.telemetry.attempts).toEqual([]); // normalised defaults
   });
 
   it('skips malformed lines', async () => {

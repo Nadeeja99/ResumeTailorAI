@@ -107,7 +107,7 @@ describe('OptimizerTab', () => {
       '/generate-improved': () =>
         sse([
           { type: 'meta', requestId: 'r2', operation: 'generate-improved', promptVersion: 'v1.1' },
-          { type: 'chunk', text: 'JANE DOE\n' },
+          { type: 'chunk', text: '# Jane Doe\n\n## Summary\n' },
           { type: 'chunk', text: 'Tailored summary line' },
           { type: 'done', telemetry: { requestId: 'r2' } },
         ]),
@@ -116,7 +116,8 @@ describe('OptimizerTab', () => {
     await user.click(screen.getByRole('button', { name: /analyze resume/i }));
     await user.click(await screen.findByRole('button', { name: /generate tailored resume/i }));
 
-    expect(await screen.findByText('Tailored summary line')).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Summary' })).toBeInTheDocument();
+    expect(screen.getByText('Tailored summary line')).toBeInTheDocument();
     expect(await screen.findByRole('tab', { name: /changes/i })).toBeInTheDocument();
   });
 });

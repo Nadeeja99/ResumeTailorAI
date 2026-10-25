@@ -58,3 +58,31 @@ describe('heuristicAnalyze', () => {
     expect(result.strengths).toContain('Matched skill: react');
   });
 });
+
+describe('markdownBlocks', async () => {
+  const { parseMarkdownBlocks, markdownToPlainText, parseInline } = await import('./markdownBlocks');
+
+  it('parses headings, bullets, paragraphs and inline emphasis', () => {
+    const blocks = parseMarkdownBlocks('# Jane Doe\n## Experience\n**Lead** · Acme · 2021\n- Cut costs by *30%* using `k8s`\n---');
+    expect(blocks.map(b => b.kind)).toEqual(['h1', 'h2', 'paragraph', 'bullet']);
+    expect(blocks[2].runs[0]).toEqual({ text: 'Lead', bold: true });
+    expect(blocks[3].runs).toEqual([
+      { text: 'Cut costs by ' },
+      { text: '30%', italic: true },
+      { text: ' using ' },
+      { text: 'k8s', code: true },
+    ]);
+  });
+
+  it('keeps fenced code verbatim', () => {
+    expect(parseMarkdownBlocks('```\n# not a heading\n```')).toEqual([{ kind: 'code', runs: [{ text: '# not a heading', code: true }] }]);
+  });
+
+  it('flattens to readable text for diffing against a plain resume', () => {
+    expect(markdownToPlainText('# Jane\n## Skills\n- **React**, TypeScript')).toBe('Jane\n\nSKILLS\n• React, TypeScript');
+  });
+
+  it('leaves unmatched markers alone', () => {
+    expect(parseInline('5 * 3 = 15')).toEqual([{ text: '5 * 3 = 15' }]);
+  });
+});

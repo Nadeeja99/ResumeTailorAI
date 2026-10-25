@@ -10,6 +10,10 @@ export interface AIState<T> {
   error: Error | null;
   telemetry: AITelemetry | null;
   timing: ClientTiming | null;
+  /** performance.now() when the current run started — drives live elapsed timers. */
+  startedAt: number | null;
+  /** performance.now() of the first streamed chunk (streams only). */
+  firstChunkAt: number | null;
 }
 
 /** `run()` never rejects — callers branch on the outcome instead of wrapping every click in try/catch. */
@@ -18,7 +22,15 @@ export type AIOutcome<T> =
   | { status: 'error'; error: Error }
   | { status: 'aborted' };
 
-const idle = <T>(): AIState<T> => ({ status: 'idle', data: null, error: null, telemetry: null, timing: null });
+const idle = <T>(): AIState<T> => ({
+  status: 'idle',
+  data: null,
+  error: null,
+  telemetry: null,
+  timing: null,
+  startedAt: null,
+  firstChunkAt: null,
+});
 
 const raf: (cb: () => void) => number =
   typeof requestAnimationFrame === 'function' ? cb => requestAnimationFrame(cb) : cb => window.setTimeout(cb, 16);
@@ -58,11 +70,11 @@ export function useAITask<T>() {
   const run = useCallback(
     async (executor: (signal: AbortSignal) => Promise<AIResult<T>>): Promise<AIOutcome<T>> => {
       const controller = start();
-      setState({ ...idle<T>(), status: 'loading' });
+      setState({ ...idle<T>(), status: 'loading', startedAt: performance.now() });
       try {
         const result = await executor(controller.signal);
         if (isCurrent(controller)) {
-          setState({ status: 'success', data: result.data, error: null, telemetry: result.telemetry, timing: result.timing });
+          setState(s => ({ ...s, status: 'success', data: result.data, error: null, telemetry: result.telemetry, timing: result.timing }));
         }
         return { status: 'success', result };
       } catch (error) {
@@ -95,7 +107,14 @@ export function useAIStream() {
     frame.current = null;
     const chunk = pending.current;
     pending.current = '';
-    if (chunk) setState(s => ({ ...s, status: 'streaming', data: (s.data ?? '') + chunk }));
+    if (chunk) {
+      setState(s => ({
+        ...s,
+        status: 'streaming',
+        data: (s.data ?? '') + chunk,
+        firstChunkAt: s.firstChunkAt ?? performance.now(),
+      }));
+    }
   }, []);
 
   useEffect(() => () => {
@@ -108,7 +127,7 @@ export function useAIStream() {
     ): Promise<AIOutcome<string>> => {
       const controller = start();
       pending.current = '';
-      setState({ ...idle<string>(), status: 'loading' });
+      setState({ ...idle<string>(), status: 'loading', startedAt: performance.now() });
 
       const onChunk = (chunk: string) => {
         if (!isCurrent(controller)) return;
@@ -120,7 +139,7 @@ export function useAIStream() {
         const result = await executor(controller.signal, onChunk);
         if (isCurrent(controller)) {
           flush();
-          setState({ status: 'success', data: result.data, error: null, telemetry: result.telemetry, timing: result.timing });
+          setState(s => ({ ...s, status: 'success', data: result.data, error: null, telemetry: result.telemetry, timing: result.timing }));
         }
         return { status: 'success', result };
       } catch (error) {

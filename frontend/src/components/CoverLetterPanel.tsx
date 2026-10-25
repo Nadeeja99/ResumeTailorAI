@@ -7,6 +7,8 @@ import { Label } from '@/components/ui/label';
 import { useToast } from '@/components/ui/use-toast';
 import { Kbd } from '@/components/common/Kbd';
 import { RequestError } from '@/components/common/RequestError';
+import { StreamControls } from '@/components/ai/StreamControls';
+import { TelemetryDrawer } from '@/components/ai/telemetry/TelemetryDrawer';
 import { useAIStream } from '@/hooks/useAI';
 import { SUBMIT_SHORTCUT_LABEL, useSubmitShortcut } from '@/hooks/useSubmitShortcut';
 import { exportElementToPdf, exportTextToDocx } from '@/lib/exportDocument';
@@ -79,7 +81,7 @@ export const CoverLetterPanel = ({ resume, jobDescription }: CoverLetterPanelPro
               </Button>
             )}
           </div>
-          {stream.status === 'error' && stream.error && <RequestError error={stream.error} onRetry={generate} />}
+          {stream.status === 'error' && stream.error && <RequestError error={stream.error} onRetry={generate} telemetry={stream.telemetry} />}
         </CardContent>
       </Card>
 
@@ -87,15 +89,17 @@ export const CoverLetterPanel = ({ resume, jobDescription }: CoverLetterPanelPro
         <Card>
           <CardHeader>
             <div className="flex flex-wrap items-center justify-between gap-2">
-              <CardTitle className="flex items-center gap-2">
-                Preview
-                {stream.isPending && (
-                  <span className="inline-flex items-center gap-1.5 rounded-md bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary">
-                    <RefreshCw className="h-3 w-3 animate-spin" aria-hidden /> Writing…
-                  </span>
-                )}
-                {stream.status === 'aborted' && <span className="text-xs font-normal text-muted-foreground">Stopped</span>}
-              </CardTitle>
+              <div className="flex flex-wrap items-center gap-3">
+                <CardTitle>Preview</CardTitle>
+                <StreamControls
+                  status={stream.status}
+                  startedAt={stream.startedAt}
+                  firstChunkAt={stream.firstChunkAt}
+                  chars={coverLetter.length}
+                  timing={stream.timing}
+                  onStop={stream.abort}
+                />
+              </div>
 
               {!stream.isPending && coverLetter && (
                 <div className="flex gap-2">
@@ -142,6 +146,8 @@ export const CoverLetterPanel = ({ resume, jobDescription }: CoverLetterPanelPro
           </CardContent>
         </Card>
       )}
+
+      <TelemetryDrawer telemetry={stream.telemetry} timing={stream.timing} />
     </div>
   );
 };

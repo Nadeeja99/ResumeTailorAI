@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Lightbulb, Loader2, MessageSquare } from 'lucide-react';
+import { Lightbulb, MessageSquare } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { generateInterviewPrep, type InterviewPrepResult } from '@/services/resumeApi';
 import { Badge } from '@/components/ui/badge';
@@ -7,6 +7,8 @@ import { Button } from '@/components/ui/button';
 import { Card, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { RequestError } from '@/components/common/RequestError';
+import { CancelButton } from '@/components/ai/CancelButton';
+import { TelemetryDrawer } from '@/components/ai/telemetry/TelemetryDrawer';
 import { QuestionCard } from '@/components/interview/QuestionCard';
 import { useAITask } from '@/hooks/useAI';
 import { DIFFICULTY_TONE } from '@/lib/score';
@@ -66,9 +68,7 @@ export default function InterviewPrepPanel({ resume, jobDescription }: Props) {
             {result && <p className="text-sm font-medium">Role: {result.roleTitle}</p>}
           </div>
           {loading ? (
-            <Button variant="outline" onClick={task.abort} className="shrink-0">
-              <Loader2 className="animate-spin" /> Cancel
-            </Button>
+            <CancelButton startedAt={task.startedAt} onCancel={task.abort} />
           ) : (
             <Button onClick={generate} className="shrink-0">
               {result ? 'Regenerate' : 'Generate questions'}
@@ -77,7 +77,7 @@ export default function InterviewPrepPanel({ resume, jobDescription }: Props) {
         </CardHeader>
       </Card>
 
-      {task.status === 'error' && task.error && <RequestError error={task.error} onRetry={generate} />}
+      {task.status === 'error' && task.error && <RequestError error={task.error} onRetry={generate} telemetry={task.telemetry} />}
 
       {loading && (
         <div className="space-y-3" aria-busy="true" aria-label="Generating questions">
@@ -133,6 +133,8 @@ export default function InterviewPrepPanel({ resume, jobDescription }: Props) {
               <p className="py-8 text-center text-sm text-muted-foreground">No questions in this category.</p>
             )}
           </div>
+
+          <TelemetryDrawer telemetry={task.telemetry} timing={task.timing} />
 
           <div className="flex items-start gap-3 rounded-lg border bg-muted/40 p-4">
             <Lightbulb className="mt-0.5 h-4 w-4 shrink-0 text-primary" aria-hidden />

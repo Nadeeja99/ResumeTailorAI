@@ -1,6 +1,6 @@
 import { ApiError, type GenerateContentResponseUsageMetadata } from '@google/genai';
 import { env } from '../../config/env.js';
-import { VERSION as PROMPT_VERSION } from '../../prompts/index.js';
+import { VERSION as PROMPT_VERSION, type PromptParts } from '../../prompts/index.js';
 import { errorSummary } from './errors.js';
 
 export interface TokenUsage {
@@ -34,7 +34,8 @@ export interface AITelemetry {
   schema: SchemaStatus | null;
   context: { name: string; chars: number }[];
   embeddings: { model: string; calls: number; inputs: number } | null;
-  prompts?: string[];
+  thinkingLevel: string | null;
+  prompts?: { system: string | null; user: string }[];
 }
 
 export interface ResponseMeta {
@@ -50,7 +51,7 @@ export class TelemetryTracker {
   private firstTokenAt: number | null = null;
   private readonly data: Omit<AITelemetry, 'ttftMs' | 'totalMs'>;
 
-  constructor(init: { requestId: string; operation: string; context: Record<string, string> }) {
+  constructor(init: { requestId: string; operation: string; context: Record<string, string>; thinkingLevel?: string }) {
     this.data = {
       requestId: init.requestId,
       operation: init.operation,
@@ -64,6 +65,7 @@ export class TelemetryTracker {
       schema: null,
       context: Object.entries(init.context).map(([name, value]) => ({ name, chars: value.length })),
       embeddings: null,
+      thinkingLevel: init.thinkingLevel ?? null,
     };
   }
 
@@ -71,8 +73,13 @@ export class TelemetryTracker {
     return this.data.requestId;
   }
 
-  recordPrompt(prompt: string): void {
-    if (env.EXPOSE_PROMPTS) (this.data.prompts ??= []).push(prompt);
+  recordPrompt(prompt: PromptParts): void {
+    if (env.EXPOSE_PROMPTS) (this.data.prompts ??= []).push({ system: prompt.system || null, user: prompt.user });
+  }
+
+  /** The configured thinking level was rejected by `model`, which then ran with its default. */
+  recordThinkingFallback(model: string): void {
+    this.data.thinkingLevel = `${this.data.thinkingLevel} → default (unsupported by ${model})`;
   }
 
   recordAttempt(model: string, error?: unknown): void {

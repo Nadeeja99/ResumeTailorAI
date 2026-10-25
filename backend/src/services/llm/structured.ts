@@ -1,7 +1,8 @@
 import { z } from 'zod';
 import { logger } from '../../lib/logger.js';
 import { AIError } from './errors.js';
-import { baseConfig, getClient, responseMeta, withModelFallback, type CallContext } from './client.js';
+import type { PromptParts } from '../../prompts/index.js';
+import { callWithConfig, getClient, responseMeta, withModelFallback, type CallContext } from './client.js';
 
 const jsonSchemaCache = new WeakMap<z.ZodType, unknown>();
 
@@ -31,29 +32,34 @@ function validate<T>(schema: z.ZodType<T>, text: string | undefined): Validation
   return { ok: false, issues: result.error.issues.map(i => `${i.path.join('.') || '(root)'}: ${i.message}`) };
 }
 
-function repairPrompt(previous: string | undefined, issues: string[]): string {
-  return `The JSON below failed validation against the required schema.
+function repairPrompt(original: PromptParts, previous: string | undefined, issues: string[]): PromptParts {
+  return {
+    system: original.system,
+    user: `The JSON below failed validation against the required schema.
 Fix ONLY the listed problems, keep all other content unchanged, and return the corrected JSON.
 
 PROBLEMS:
 ${issues.map(i => `- ${i}`).join('\n')}
 
 JSON:
-${previous ?? ''}`;
+${previous ?? ''}`,
+  };
 }
 
 // Schema-constrained generation with Zod validation and a single repair round-trip.
-export async function generateStructured<T>(prompt: string, schema: z.ZodType<T>, ctx: CallContext): Promise<T> {
-  const config = {
-    ...baseConfig(ctx.signal),
-    responseMimeType: 'application/json',
-    responseJsonSchema: responseJsonSchema(schema),
-  };
+export async function generateStructured<T>(prompt: PromptParts, schema: z.ZodType<T>, ctx: CallContext): Promise<T> {
+  const jsonConfig = { responseMimeType: 'application/json', responseJsonSchema: responseJsonSchema(schema) };
 
   return withModelFallback(ctx, async model => {
-    const call = async (contents: string) => {
-      ctx.tracker.recordPrompt(contents);
-      const response = await getClient().models.generateContent({ model, contents, config });
+    const call = async (parts: PromptParts) => {
+      ctx.tracker.recordPrompt(parts);
+      const response = await callWithConfig(
+        ctx,
+        model,
+        parts,
+        config => getClient().models.generateContent({ model, contents: parts.user, config }),
+        jsonConfig
+      );
       ctx.tracker.recordResponse(responseMeta(model, response));
       return response.text;
     };
@@ -65,7 +71,7 @@ export async function generateStructured<T>(prompt: string, schema: z.ZodType<T>
       return initial.data;
     }
 
-    const repaired = validate(schema, await call(repairPrompt(first, initial.issues)));
+    const repaired = validate(schema, await call(repairPrompt(prompt, first, initial.issues)));
     if (repaired.ok) {
       ctx.tracker.recordSchema('repaired');
       return repaired.data;

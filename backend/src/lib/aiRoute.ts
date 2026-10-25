@@ -3,13 +3,14 @@ import { VERSION as PROMPT_VERSION } from '../prompts/index.js';
 import type { CallContext } from '../services/llm/client.js';
 import { errorSummary, toAIError, type AIError } from '../services/llm/errors.js';
 import { TelemetryTracker } from '../services/llm/telemetry.js';
+import { thinkingLevelFor } from '../services/llm/thinking.js';
 import { logger } from './logger.js';
 import { openSSE } from './sse.js';
 
 type ContextOf<B> = (body: B) => Record<string, string>;
 
 function createTracker(res: Response, operation: string, context: Record<string, string>): TelemetryTracker {
-  return new TelemetryTracker({ requestId: res.locals.requestId, operation, context });
+  return new TelemetryTracker({ requestId: res.locals.requestId, operation, context, thinkingLevel: thinkingLevelFor(operation) });
 }
 
 function clientAbortSignal(res: Response): AbortSignal {
@@ -45,7 +46,7 @@ export function aiRoute<B>(
   return async (req: Request, res: Response) => {
     const tracker = createTracker(res, operation, contextOf(req.body));
     try {
-      const data = await run(req.body, { tracker, signal: clientAbortSignal(res) });
+      const data = await run(req.body, { tracker, signal: clientAbortSignal(res), thinkingLevel: thinkingLevelFor(operation) });
       logCompleted(tracker);
       res.json({ data, telemetry: tracker.snapshot() });
     } catch (err) {
@@ -68,7 +69,7 @@ export function streamRoute<B>(
     const sse = openSSE(res);
     sse.send({ type: 'meta', requestId: tracker.requestId, operation, promptVersion: PROMPT_VERSION });
     try {
-      for await (const text of run(req.body, { tracker, signal: sse.signal })) {
+      for await (const text of run(req.body, { tracker, signal: sse.signal, thinkingLevel: thinkingLevelFor(operation) })) {
         sse.send({ type: 'chunk', text });
       }
       logCompleted(tracker);
