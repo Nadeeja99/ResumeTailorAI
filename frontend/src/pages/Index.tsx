@@ -5,6 +5,7 @@ import { AppShell } from '@/components/layout/AppShell';
 import { EmptyState } from '@/components/common/EmptyState';
 import { ErrorBoundary } from '@/components/common/ErrorBoundary';
 import { OptimizerTab } from '@/components/optimizer/OptimizerTab';
+import type { ResumeSource } from '@/components/preview/OriginalResume';
 import PricingModal from '@/components/PricingModal';
 import UsageBanner from '@/components/UsageBanner';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -67,6 +68,7 @@ function Tool({ label, visited, ready, needs, icon, children }: ToolProps) {
 
 const Index = () => {
   const [resume, setResume] = useState('');
+  const [resumeSource, setResumeSource] = useState<ResumeSource | null>(null);
   const [jobDescription, setJobDescription] = useState('');
   const [usageStatus, setUsageStatus] = useState<UsageStatus | null>(null);
   const [pricingOpen, setPricingOpen] = useState(false);
@@ -135,6 +137,8 @@ const Index = () => {
           <ErrorBoundary label="Optimizer">
             <OptimizerTab
               resume={resume}
+              resumeSource={resumeSource}
+              onResumeSourceChange={setResumeSource}
               jobDescription={jobDescription}
               onResumeChange={setResume}
               onJobDescriptionChange={setJobDescription}

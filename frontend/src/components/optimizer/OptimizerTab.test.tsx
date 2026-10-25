@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { OptimizerTab } from './OptimizerTab';
+import type { ResumeSource } from '@/components/preview/OriginalResume';
 
 const RESUME = 'Jane Doe — Senior Frontend Engineer with 6 years of React and TypeScript experience at fintech companies.';
 const JD = 'We need a Senior Frontend Engineer skilled in React, TypeScript, Docker and Kubernetes.';
@@ -36,9 +37,12 @@ function mockApi(routes: Record<string, () => Response>) {
 function Harness() {
   const [resume, setResume] = useState('');
   const [jd, setJd] = useState('');
+  const [source, setSource] = useState<ResumeSource | null>(null);
   return (
     <OptimizerTab
       resume={resume}
+      resumeSource={source}
+      onResumeSourceChange={setSource}
       jobDescription={jd}
       onResumeChange={setResume}
       onJobDescriptionChange={setJd}

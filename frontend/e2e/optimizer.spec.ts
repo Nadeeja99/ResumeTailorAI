@@ -113,17 +113,36 @@ test.describe('Optimizer', () => {
     await expect(page.getByRole('alert')).toHaveCount(0);
   });
 
-  test('extracts text from an uploaded PDF (pdf.js worker under the production CSP)', async ({ page, context }) => {
+  test('previews an uploaded PDF exactly and keeps its line structure (pdf.js under the production CSP)', async ({ page, context }) => {
     const maker = await context.newPage();
-    await maker.setContent('<h1>Jordan Lee</h1><p>Platform engineer with eight years of Go and Kubernetes experience.</p>');
-    const pdf = await maker.pdf();
+    await maker.setContent(`
+      <h1>Jordan Lee</h1>
+      <p>Platform engineer with eight years of Go and Kubernetes experience building payment systems.</p>
+      <h2>EXPERIENCE</h2>
+      <ul><li>Led migration of 40 services to Kubernetes</li><li>Cut deploy time from 2 hours to 9 minutes</li></ul>`);
+    const pdf = await maker.pdf({ format: 'A4' });
     await maker.close();
 
-    await mockApi(page, {});
+    await mockApi(page, { '/analyze': route => route.fulfill(json({ data: ANALYSIS, telemetry: telemetry() })) });
     await page.goto('/');
     await page.getByRole('tab', { name: 'Upload' }).first().click();
     await page.setInputFiles('#resume-upload', { name: 'resume.pdf', mimeType: 'application/pdf', buffer: pdf });
 
-    await expect(page.locator('#resume-text')).toHaveValue(/Kubernetes/);
+    // Extracted text keeps lines instead of one wall of text
+    const resumeText = page.locator('#resume-text');
+    await expect(resumeText).toHaveValue(/Kubernetes/);
+    expect((await resumeText.inputValue()).split('\n').length).toBeGreaterThan(3);
+
+    await page.locator('#job-description-text').fill('Platform engineer: Go, Kubernetes, Terraform, on-call experience.');
+    await page.getByRole('button', { name: /analyze resume/i }).click();
+
+    // The original preview is the real PDF page, rendered to canvas
+    const pageImage = page.getByRole('img', { name: 'Page 1 of 1' });
+    await expect(pageImage).toBeVisible();
+    const box = await pageImage.boundingBox();
+    expect(box!.height / box!.width).toBeCloseTo(297 / 210, 1); // A4 proportions
+
+    await page.getByRole('button', { name: 'What the AI reads' }).click();
+    await expect(page.locator('pre', { hasText: 'Led migration of 40 services' })).toBeVisible();
   });
 });

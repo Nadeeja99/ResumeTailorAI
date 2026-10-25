@@ -10,6 +10,7 @@ import { AnalysisResults } from '@/components/AnalysisResults';
 import { JobDescriptionInput } from '@/components/JobDescriptionInput';
 import { ResumeInput } from '@/components/ResumeInput';
 import { GeneratedResume } from '@/components/optimizer/GeneratedResume';
+import type { ResumeSource } from '@/components/preview/OriginalResume';
 import { useAIStream, useAITask } from '@/hooks/useAI';
 import { SUBMIT_SHORTCUT_LABEL, useSubmitShortcut } from '@/hooks/useSubmitShortcut';
 import { heuristicAnalyze } from '@/lib/heuristicAnalysis';
@@ -20,6 +21,9 @@ import {
 
 interface OptimizerTabProps {
   resume: string;
+  /** Uploaded PDF behind the resume text, if any. */
+  resumeSource: ResumeSource | null;
+  onResumeSourceChange: (source: ResumeSource | null) => void;
   jobDescription: string;
   onResumeChange: (value: string) => void;
   onJobDescriptionChange: (value: string) => void;
@@ -37,7 +41,7 @@ const STEPS = [
 const shouldUseHeuristic = (error: Error) => !(error instanceof ApiError) || error.status === 0 || error.status >= 500;
 
 export function OptimizerTab(props: OptimizerTabProps) {
-  const { resume, jobDescription, onResumeChange, onJobDescriptionChange, onAnalyzed, onUsageLimit } = props;
+  const { resume, resumeSource, onResumeSourceChange, jobDescription, onResumeChange, onJobDescriptionChange, onAnalyzed, onUsageLimit } = props;
   const analysisTask = useAITask<AnalysisResult>();
   const generation = useAIStream();
   const [heuristic, setHeuristic] = useState<AnalysisResult | null>(null);
@@ -79,7 +83,7 @@ export function OptimizerTab(props: OptimizerTabProps) {
     <div className="space-y-10">
       <div onKeyDown={onKeyDown} className="space-y-6">
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-          <ResumeInput resume={resume} onResumeChange={onResumeChange} />
+          <ResumeInput resume={resume} onResumeChange={onResumeChange} onSourceChange={onResumeSourceChange} />
           <JobDescriptionInput jobDescription={jobDescription} onJobDescriptionChange={onJobDescriptionChange} />
         </div>
 
@@ -142,6 +146,7 @@ export function OptimizerTab(props: OptimizerTabProps) {
             />
             <GeneratedResume
               original={resume}
+              originalSource={resumeSource}
               stream={generation}
               suggestions={analysis.suggestedImprovements}
               onRetry={handleGenerate}

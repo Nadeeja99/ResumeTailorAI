@@ -6,6 +6,7 @@ import { StreamControls } from '@/components/ai/StreamControls';
 import { TelemetryDrawer } from '@/components/ai/telemetry/TelemetryDrawer';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ResumePreview } from '@/components/ResumePreview';
+import { OriginalResume, type ResumeSource } from '@/components/preview/OriginalResume';
 import type { useAIStream } from '@/hooks/useAI';
 import { markdownToPlainText } from '@/lib/markdownBlocks';
 
@@ -14,13 +15,15 @@ const ResumeDiff = lazy(() => import('@/components/ResumeDiff').then(m => ({ def
 
 interface GeneratedResumeProps {
   original: string;
+  /** The uploaded PDF behind `original`, if any — previewed exactly. */
+  originalSource: ResumeSource | null;
   stream: ReturnType<typeof useAIStream>;
   suggestions: string[];
   onRetry: () => void;
 }
 
 /** Streamed tailored resume (Markdown) with preview / changes tabs. Shows the original until something is generated. */
-export function GeneratedResume({ original, stream, suggestions, onRetry }: GeneratedResumeProps) {
+export function GeneratedResume({ original, originalSource, stream, suggestions, onRetry }: GeneratedResumeProps) {
   const [tab, setTab] = useState('preview');
   const { text, status, error } = stream;
   const finished = Boolean(text) && !stream.isPending;
@@ -37,7 +40,7 @@ export function GeneratedResume({ original, stream, suggestions, onRetry }: Gene
     return (
       <div className="space-y-4">
         {errorBanner(true)}
-        <ResumePreview resume={original} />
+        <OriginalResume text={original} source={originalSource} />
       </div>
     );
   }
@@ -59,7 +62,6 @@ export function GeneratedResume({ original, stream, suggestions, onRetry }: Gene
         <TabsContent value="preview">
           <ResumePreview
             resume={text}
-            format="markdown"
             isStreaming={stream.isPending}
             suggestions={status === 'success' ? suggestions : []}
             status={

@@ -5,12 +5,11 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/components/ui/use-toast';
 import { Markdown } from '@/components/ai/Markdown';
-import { classifyLine, exportElementToPdf, exportMarkdownToDocx, exportTextToDocx } from '@/lib/exportDocument';
+import { exportElementToPdf, exportMarkdownToDocx } from '@/lib/exportDocument';
 
 interface ResumePreviewProps {
+  /** The AI-tailored resume in Markdown (prompt v2). The user's own resume is shown by OriginalResume. */
   resume: string;
-  /** `markdown` for AI rewrites (prompt v2); `plain` for the user's own resume text. */
-  format?: 'plain' | 'markdown';
   isStreaming?: boolean;
   suggestions?: string[];
   /** Rendered in the card header, e.g. live stream controls. */
@@ -19,24 +18,7 @@ interface ResumePreviewProps {
   footer?: ReactNode;
 }
 
-function ResumeLine({ line }: { line: string }) {
-  switch (classifyLine(line)) {
-    case 'heading':
-      return (
-        <h3 className="mb-2 mt-6 border-b border-zinc-200 pb-1 text-sm font-semibold uppercase tracking-wide text-zinc-900 first:mt-0">
-          {line.trim()}
-        </h3>
-      );
-    case 'bullet':
-      return <p className="mb-1 ml-4 text-sm text-zinc-800">{line.trim()}</p>;
-    case 'text':
-      return <p className="mb-2 text-sm leading-relaxed text-zinc-800">{line.trim()}</p>;
-    default:
-      return <div className="h-2" />;
-  }
-}
-
-export const ResumePreview = ({ resume, format = 'plain', isStreaming = false, suggestions = [], status, footer }: ResumePreviewProps) => {
+export const ResumePreview = ({ resume, isStreaming = false, suggestions = [], status, footer }: ResumePreviewProps) => {
   const paperRef = useRef<HTMLDivElement>(null);
   const [exporting, setExporting] = useState<'pdf' | 'docx' | null>(null);
   const { toast } = useToast();
@@ -45,11 +27,7 @@ export const ResumePreview = ({ resume, format = 'plain', isStreaming = false, s
     setExporting(kind);
     try {
       if (kind === 'pdf' && paperRef.current) await exportElementToPdf(paperRef.current, 'tailored-resume.pdf');
-      if (kind === 'docx') {
-        await (format === 'markdown'
-          ? exportMarkdownToDocx(resume, 'tailored-resume.docx')
-          : exportTextToDocx(resume, 'tailored-resume.docx', { structured: true }));
-      }
+      if (kind === 'docx') await exportMarkdownToDocx(resume, 'tailored-resume.docx');
       toast({ title: 'Downloaded', description: `Resume saved as ${kind === 'pdf' ? 'PDF' : 'Word document'}.` });
     } catch {
       toast({ title: 'Export failed', description: 'Could not create the file. Please try again.', variant: 'destructive' });
@@ -91,11 +69,7 @@ export const ResumePreview = ({ resume, format = 'plain', isStreaming = false, s
           >
             {resume ? (
               <div className="space-y-1">
-                {format === 'markdown' ? (
-                  <Markdown content={resume} variant="paper" />
-                ) : (
-                  resume.split('\n').map((line, i) => <ResumeLine key={i} line={line} />)
-                )}
+                <Markdown content={resume} variant="paper" />
                 {isStreaming && <span className="ml-0.5 inline-block h-4 w-0.5 animate-pulse bg-zinc-900 align-middle" />}
               </div>
             ) : (

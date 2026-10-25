@@ -13,9 +13,11 @@ export function classifyLine(line: string): LineKind {
   const trimmed = line.trim();
   if (!trimmed) return 'blank';
   if (BULLET.test(trimmed)) return 'bullet';
+  // Headings are short: a long line that merely starts with "Projects…" is body text
+  const short = trimmed.length <= 60 && trimmed.split(/\s+/).length <= 6;
   // All-caps lines ("WORK HISTORY") or known section names; digit-only lines like dates are not headings
-  if (trimmed === trimmed.toUpperCase() && /[A-Z]/.test(trimmed)) return 'heading';
-  if (SECTION_HEADING.test(trimmed)) return 'heading';
+  if (short && trimmed === trimmed.toUpperCase() && /[A-Z]/.test(trimmed)) return 'heading';
+  if (short && SECTION_HEADING.test(trimmed)) return 'heading';
   return 'text';
 }
 

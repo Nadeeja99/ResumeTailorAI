@@ -86,3 +86,48 @@ describe('markdownBlocks', async () => {
     expect(parseInline('5 * 3 = 15')).toEqual([{ text: '5 * 3 = 15' }]);
   });
 });
+
+describe('positionedTextToString (PDF layout rebuild)', async () => {
+  const { positionedTextToString } = await import('./fileParsing');
+  // Helper: a fragment at (x, y) with a 10pt font; width ≈ 5pt per character
+  const t = (str: string, x: number, y: number) => ({ str, transform: [10, 0, 0, 10, x, y], width: str.length * 5, height: 10 });
+
+  it('keeps lines, paragraph gaps and word spacing', () => {
+    const text = positionedTextToString([
+      t('Jane Doe', 50, 800),
+      t('Software Engineer', 50, 786), // next line
+      t('EXPERIENCE', 50, 750), // big gap → new paragraph
+      t('Led the', 50, 736),
+      t('migration', 90, 736), // same line, normal gap → space
+    ]);
+    expect(text).toBe('Jane Doe\nSoftware Engineer\n\nEXPERIENCE\nLed the migration');
+  });
+
+  it('does not insert spaces inside words split across fragments', () => {
+    expect(positionedTextToString([t('Engin', 50, 700), t('eer', 75, 700)])).toBe('Engineer');
+  });
+
+  it('keeps visible separation for right-aligned columns', () => {
+    expect(positionedTextToString([t('Senior Engineer', 50, 700), t('2021 – 2024', 400, 700)])).toBe('Senior Engineer    2021 – 2024');
+  });
+
+  it('ignores empty end-of-line markers and standalone space fragments', () => {
+    const text = positionedTextToString([
+      t('Software Engineer, Fortude', 50, 700),
+      t(' ', 180, 700), // wide space fragment spanning the column gap
+      t('01/2021 – Present', 400, 700),
+      t('', 485, 694), // empty EOL marker at its own y
+      t('Led a platform for 400+ users', 50, 686),
+    ]);
+    expect(text).toBe('Software Engineer, Fortude    01/2021 – Present\nLed a platform for 400+ users');
+  });
+
+  it('keeps the space carried by a fragment boundary', () => {
+    expect(positionedTextToString([t('React, ', 50, 700), t('Node.js', 85, 700)])).toBe('React, Node.js');
+  });
+});
+
+it('classifyLine treats long lines that merely start with a section word as text', () => {
+  expect(classifyLine('PROJECTS LEARNMATE AI, AI-POWERED DOCUMENT ANALYSIS AND VOICE CHAT FOR STUDENTS')).toBe('text');
+  expect(classifyLine('PROJECTS')).toBe('heading');
+});

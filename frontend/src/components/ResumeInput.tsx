@@ -6,18 +6,23 @@ import { FileDropzone } from '@/components/inputs/FileDropzone';
 import { LimitedTextarea } from '@/components/inputs/LimitedTextarea';
 import { LinkedInImport } from '@/components/inputs/LinkedInImport';
 import { LIMITS } from '@/lib/limits';
+import type { ResumeSource } from '@/components/preview/OriginalResume';
 
 interface ResumeInputProps {
   resume: string;
   onResumeChange: (resume: string) => void;
+  /** Reports the uploaded PDF (for an exact preview), or null for any other input. */
+  onSourceChange: (source: ResumeSource | null) => void;
 }
 
-export const ResumeInput = ({ resume, onResumeChange }: ResumeInputProps) => {
+export const ResumeInput = ({ resume, onResumeChange, onSourceChange }: ResumeInputProps) => {
   const [tab, setTab] = useState('paste');
 
   // Imported text lands on the Paste tab so it can be reviewed and edited
-  const importText = (text: string) => {
+  const importText = (text: string, file?: File) => {
     onResumeChange(text);
+    const isPdf = file && (file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf'));
+    onSourceChange(isPdf ? { file, text } : null);
     setTab('paste');
   };
 
@@ -61,7 +66,7 @@ export const ResumeInput = ({ resume, onResumeChange }: ResumeInputProps) => {
           </TabsContent>
 
           <TabsContent value="linkedin">
-            <LinkedInImport onImported={importText} />
+            <LinkedInImport onImported={text => importText(text)} />
           </TabsContent>
         </Tabs>
       </CardContent>
