@@ -40,6 +40,7 @@ export function normalizeTelemetry(raw: Partial<AITelemetry> | null | undefined)
     usage: raw.usage ?? null,
     finishReason: raw.finishReason ?? null,
     schema: raw.schema ?? null,
+    unsupportedTerms: Array.isArray(raw.unsupportedTerms) ? raw.unsupportedTerms : null,
     context: Array.isArray(raw.context) ? raw.context : [],
     embeddings: raw.embeddings ?? null,
     thinkingLevel: raw.thinkingLevel ?? null,

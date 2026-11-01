@@ -7,6 +7,7 @@ import { streamText } from '../services/llm/text.js';
 import { TelemetryTracker } from '../services/llm/telemetry.js';
 import { AIError } from '../services/llm/errors.js';
 import { semanticAnalysis } from '../services/embeddings.js';
+import { generateImprovedResumeStream } from '../services/gemini.js';
 import type { CallContext } from '../services/llm/client.js';
 
 const models = vi.hoisted(() => ({
@@ -191,6 +192,40 @@ describe('streamText', () => {
     const error = await collect(streamText(PROMPT, makeCtx(controller.signal))).catch(e => e);
     expect(error).toBeInstanceOf(AIError);
     expect(error.code).toBe('ABORTED');
+  });
+});
+
+describe('generateImprovedResumeStream', () => {
+  const resume = 'Jane Doe\nBuilt React dashboards on AWS';
+  const jd = 'Requirements: React, AWS, Docker, Kubernetes';
+
+  it('streams the rewrite unchanged and records job-ad terms the resume does not support', async () => {
+    models.generateContentStream.mockResolvedValueOnce(
+      (async function* () {
+        yield { text: '# Jane Doe\n- Built React dashboards on AWS' };
+        yield { text: ' with Docker and Kubernetes' };
+      })()
+    );
+    const ctx = makeCtx();
+
+    await expect(collect(generateImprovedResumeStream(resume, jd, [], ctx))).resolves.toEqual([
+      '# Jane Doe\n- Built React dashboards on AWS',
+      ' with Docker and Kubernetes',
+    ]);
+    expect(ctx.tracker.snapshot().unsupportedTerms).toEqual(['Docker', 'Kubernetes']);
+  });
+
+  it('leaves the check unrecorded when the rewrite fails part-way', async () => {
+    models.generateContentStream.mockResolvedValueOnce(
+      (async function* () {
+        yield { text: '# Jane Doe' };
+        throw new ApiError({ message: 'boom', status: 500 });
+      })()
+    );
+    const ctx = makeCtx();
+
+    await expect(collect(generateImprovedResumeStream(resume, jd, [], ctx))).rejects.toBeInstanceOf(AIError);
+    expect(ctx.tracker.snapshot().unsupportedTerms).toBeNull();
   });
 });
 

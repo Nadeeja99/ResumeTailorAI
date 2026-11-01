@@ -4,7 +4,7 @@
 // requirement term to appear in the resume removes those false positives.
 
 // Generic words that don't identify a requirement on their own.
-const GENERIC = new Set([
+export const GENERIC = new Set([
   'a', 'an', 'and', 'or', 'the', 'of', 'in', 'on', 'for', 'to', 'with', 'using', 'via', 'plus', 'based',
   'experience', 'experienced', 'expertise', 'knowledge', 'understanding', 'familiarity', 'background',
   'skill', 'skills', 'strong', 'excellent', 'solid', 'good', 'proven', 'deep', 'hands', 'ability', 'abilities',

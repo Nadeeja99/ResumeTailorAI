@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { describe, expect, it, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { OptimizerTab } from './OptimizerTab';
 import type { ResumeSource } from '@/components/preview/OriginalResume';
@@ -123,5 +123,25 @@ describe('OptimizerTab', () => {
     expect(await screen.findByRole('heading', { name: 'Summary' })).toBeInTheDocument();
     expect(screen.getByText('Tailored summary line')).toBeInTheDocument();
     expect(await screen.findByRole('tab', { name: /changes/i })).toBeInTheDocument();
+    expect(screen.queryByText(/check before you send/i)).not.toBeInTheDocument();
+  });
+
+  it('warns about job-ad terms the rewrite added that the original resume never mentions', async () => {
+    mockApi({
+      '/analyze': () => json({ data: ANALYSIS, telemetry: { requestId: 'r1' } }),
+      '/generate-improved': () =>
+        sse([
+          { type: 'meta', requestId: 'r2', operation: 'generate-improved', promptVersion: 'v3' },
+          { type: 'chunk', text: '# Jane Doe\n\n## Skills\nReact, TypeScript, Docker, Kubernetes' },
+          { type: 'done', telemetry: { requestId: 'r2', unsupportedTerms: ['Docker', 'Kubernetes'] } },
+        ]),
+    });
+    const user = await fillInputs();
+    await user.click(screen.getByRole('button', { name: /analyze resume/i }));
+    await user.click(await screen.findByRole('button', { name: /generate tailored resume/i }));
+
+    const warning = (await screen.findByText(/check before you send/i)).closest('[role="status"]') as HTMLElement;
+    expect(within(warning).getByText('Docker')).toBeInTheDocument();
+    expect(within(warning).getByText('Kubernetes')).toBeInTheDocument();
   });
 });

@@ -1,5 +1,6 @@
 import { lazy, Suspense, useMemo, useState } from 'react';
-import { FileText, GitCompare } from 'lucide-react';
+import { AlertTriangle, FileText, GitCompare } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { RequestError } from '@/components/common/RequestError';
 import { StreamControls } from '@/components/ai/StreamControls';
@@ -29,6 +30,8 @@ export function GeneratedResume({ original, originalSource, stream, suggestions,
   const finished = Boolean(text) && !stream.isPending;
   // Diff readable text, not Markdown syntax, against the user's plain-text original
   const plainRewrite = useMemo(() => (finished ? markdownToPlainText(text) : ''), [finished, text]);
+  // The server's check for skills the AI added from the job ad despite being told not to
+  const unsupported = status === 'success' ? (stream.telemetry?.unsupportedTerms ?? []) : [];
 
   // Telemetry goes under the error only when there is no preview (the preview footer shows it otherwise)
   const errorBanner = (withTelemetry: boolean) =>
@@ -48,6 +51,24 @@ export function GeneratedResume({ original, originalSource, stream, suggestions,
   return (
     <div className="space-y-4">
       {errorBanner(false)}
+      {unsupported.length > 0 && (
+        <div role="status" className="flex gap-3 rounded-md border border-warning/40 bg-warning/10 p-4">
+          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-warning" aria-hidden />
+          <div className="space-y-2 text-sm">
+            <p>
+              <span className="font-medium">Check before you send.</span> The rewrite mentions terms from the job ad that
+              your original resume doesn’t. Remove them unless you really have this experience.
+            </p>
+            <div className="flex flex-wrap gap-1.5">
+              {unsupported.map(term => (
+                <Badge key={term} variant="warning">
+                  {term}
+                </Badge>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
       <Tabs value={finished ? tab : 'preview'} onValueChange={setTab}>
         <TabsList className="mb-4">
           <TabsTrigger value="preview" className="gap-2">

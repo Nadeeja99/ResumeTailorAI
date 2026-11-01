@@ -96,6 +96,17 @@ export function ProvenanceSection({ telemetry: t }: { telemetry: AITelemetry }) 
           value={<Badge variant={t.schema === 'valid' ? 'success' : t.schema === 'repaired' ? 'warning' : 'danger'}>{t.schema}</Badge>}
         />
       )}
+      {t.unsupportedTerms && (
+        <Metric
+          label="Unsupported terms"
+          hint="Job-ad terms in the output that the original resume never mentions"
+          value={
+            <Badge variant={t.unsupportedTerms.length === 0 ? 'success' : 'warning'}>
+              {t.unsupportedTerms.length === 0 ? 'none' : t.unsupportedTerms.length}
+            </Badge>
+          }
+        />
+      )}
       <Metric
         label="Request ID"
         value={

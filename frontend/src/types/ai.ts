@@ -27,6 +27,8 @@ export interface AITelemetry {
   usage: TokenUsage | null;
   finishReason: string | null;
   schema: 'valid' | 'repaired' | 'failed' | null;
+  /** Job-ad terms a rewrite claims that the original resume never mentions; null when not checked. */
+  unsupportedTerms: string[] | null;
   context: { name: string; chars: number }[];
   embeddings: { model: string; calls: number; inputs: number } | null;
   /** Configured thinking level for this operation (null = model default). */

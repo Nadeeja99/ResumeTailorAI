@@ -22,6 +22,7 @@ const TELEMETRY: AITelemetry = {
   usage: { promptTokens: 400, outputTokens: 600, thoughtsTokens: 0, totalTokens: 1000 },
   finishReason: 'STOP',
   schema: null,
+  unsupportedTerms: null,
   context: [{ name: 'resume', chars: 2000 }],
   embeddings: null,
   thinkingLevel: 'LOW',

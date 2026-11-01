@@ -1,7 +1,9 @@
 // v2: every prompt is split into a system instruction (role, rules, output format) and
 // user content (the documents). Documents are wrapped in XML tags and declared as data,
 // which keeps instructions embedded in a resume or job posting from steering the model.
-export const VERSION = 'v2';
+// v3: the resume rewrite may no longer add job-ad skills the resume doesn't show, even when an
+// improvement suggestion asks for them (v2 let suggestions like "Add Docker" override that rule).
+export const VERSION = 'v3';
 
 export interface PromptParts {
   system: string;
@@ -40,8 +42,8 @@ export function generateImprovedResumePrompt(resume: string, jobDescription: str
 ${DATA_GUARD}
 
 Rewrite the resume incorporating the improvement suggestions while:
-1. Keeping the original section structure and every factual detail — never invent employers, dates, metrics or skills
-2. Enhancing keyword alignment with the job description
+1. Keeping the original section structure and every factual detail — never invent employers, job titles, dates, metrics, tools or skills
+2. Enhancing keyword alignment with the job description, using its wording only for experience the resume already shows. A tool or skill the job asks for that the resume never mentions stays out, even if an improvement suggestion asks for it
 3. Strengthening bullet points with measurable impact where the original supports it
 4. Staying ATS-friendly: no tables, columns or images
 5. Using a professional, active tone

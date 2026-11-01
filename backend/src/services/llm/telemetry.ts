@@ -32,6 +32,8 @@ export interface AITelemetry {
   usage: TokenUsage | null;
   finishReason: string | null;
   schema: SchemaStatus | null;
+  /** Job-ad terms a rewrite claims that the original resume never mentions; null when not checked. */
+  unsupportedTerms: string[] | null;
   context: { name: string; chars: number }[];
   embeddings: { model: string; calls: number; inputs: number } | null;
   thinkingLevel: string | null;
@@ -63,6 +65,7 @@ export class TelemetryTracker {
       usage: null,
       finishReason: null,
       schema: null,
+      unsupportedTerms: null,
       context: Object.entries(init.context).map(([name, value]) => ({ name, chars: value.length })),
       embeddings: null,
       thinkingLevel: init.thinkingLevel ?? null,
@@ -116,6 +119,10 @@ export class TelemetryTracker {
     // In multi-call operations, report the worst outcome
     const rank: Record<SchemaStatus, number> = { valid: 0, repaired: 1, failed: 2 };
     if (!this.data.schema || rank[status] > rank[this.data.schema]) this.data.schema = status;
+  }
+
+  recordUnsupportedTerms(terms: string[]): void {
+    this.data.unsupportedTerms = terms;
   }
 
   recordEmbeddings(model: string, inputs: number): void {

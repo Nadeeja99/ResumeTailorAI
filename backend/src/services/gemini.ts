@@ -14,6 +14,7 @@ import {
   type JobAnalysis,
   type ResumeAnalysis,
 } from '../schemas/ai.js';
+import { unsupportedTerms } from './grounding.js';
 import type { CallContext } from './llm/client.js';
 import { generateStructured } from './llm/structured.js';
 import { generateText, streamText } from './llm/text.js';
@@ -34,13 +35,19 @@ export function analyzeResumeForJob(
   return generateStructured(compareJobsPrompt(resume, jobDescription, jobTitle), jobMatchOutputSchema, ctx);
 }
 
-export function generateImprovedResumeStream(
+export async function* generateImprovedResumeStream(
   resume: string,
   jobDescription: string,
   suggestions: string[],
   ctx: CallContext
 ): AsyncGenerator<string> {
-  return streamText(generateImprovedResumePrompt(resume, jobDescription, suggestions), ctx);
+  let rewrite = '';
+  for await (const chunk of streamText(generateImprovedResumePrompt(resume, jobDescription, suggestions), ctx)) {
+    rewrite += chunk;
+    yield chunk;
+  }
+  // Runs only on a complete rewrite; reported in the `done` event's telemetry
+  ctx.tracker.recordUnsupportedTerms(unsupportedTerms(resume, jobDescription, rewrite));
 }
 
 export function generateCoverLetterStream(

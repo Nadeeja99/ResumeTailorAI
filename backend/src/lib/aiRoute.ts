@@ -22,8 +22,18 @@ function clientAbortSignal(res: Response): AbortSignal {
 }
 
 function logCompleted(tracker: TelemetryTracker): void {
-  const { requestId, operation, model, ttftMs, totalMs, usage, schema, attempts } = tracker.snapshot();
-  logger.info('ai.completed', { requestId, operation, model, ttftMs, totalMs, usage, schema, attempts: attempts.length });
+  const { requestId, operation, model, ttftMs, totalMs, usage, schema, unsupportedTerms, attempts } = tracker.snapshot();
+  logger.info('ai.completed', {
+    requestId,
+    operation,
+    model,
+    ttftMs,
+    totalMs,
+    usage,
+    schema,
+    unsupportedTerms: unsupportedTerms?.length,
+    attempts: attempts.length,
+  });
 }
 
 function logFailed(tracker: TelemetryTracker, error: AIError): void {
