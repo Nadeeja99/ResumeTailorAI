@@ -1,7 +1,30 @@
 import type { AIResult, RequestOptions } from '@/types/ai';
+import { redactContactDetails, restoreDeep, restoringStream, type Redaction } from '@/lib/redaction';
 import { postAI, streamAI } from './aiClient';
 
 export { ApiError, isAbortError, isUsageLimitError } from './aiClient';
+
+// Resumes go out with contact details replaced by placeholders (lib/redaction); results come back restored.
+function postRedacted<T>(path: string, redaction: Redaction, body: object, opts?: RequestOptions): Promise<AIResult<T>> {
+  return postAI<T>(path, body, opts).then(result => ({ ...result, data: restoreDeep(result.data, redaction.restore) }));
+}
+
+function streamRedacted(
+  path: string,
+  redaction: Redaction,
+  body: object,
+  onChunk: (chunk: string) => void,
+  opts?: RequestOptions
+): Promise<AIResult<string>> {
+  const stream = restoringStream(onChunk, redaction);
+  return streamAI(path, body, stream.onChunk, opts).then(
+    result => ({ ...result, data: redaction.restore(result.data) }),
+    error => {
+      stream.flush(); // keep the partial text complete
+      throw error;
+    }
+  );
+}
 
 // ── Analysis ─────────────────────────────────────────────────────────────────
 
@@ -15,7 +38,8 @@ export interface AnalysisResult {
 }
 
 export function analyzeResume(resume: string, jobDescription: string, opts?: RequestOptions): Promise<AIResult<AnalysisResult>> {
-  return postAI('/analyze', { resume, jobDescription }, opts);
+  const r = redactContactDetails(resume);
+  return postRedacted('/analyze', r, { resume: r.text, jobDescription }, opts);
 }
 
 // ── Improved resume (streaming) ───────────────────────────────────────────────
@@ -27,7 +51,8 @@ export function generateImprovedResume(
   onChunk: (chunk: string) => void,
   opts?: RequestOptions
 ): Promise<AIResult<string>> {
-  return streamAI('/generate-improved', { resume, jobDescription, suggestions }, onChunk, opts);
+  const r = redactContactDetails(resume);
+  return streamRedacted('/generate-improved', r, { resume: r.text, jobDescription, suggestions }, onChunk, opts);
 }
 
 // ── Cover letter (streaming) ──────────────────────────────────────────────────
@@ -39,7 +64,8 @@ export function generateCoverLetter(
   onChunk: (chunk: string) => void,
   opts?: RequestOptions
 ): Promise<AIResult<string>> {
-  return streamAI('/generate-cover-letter', { resume, jobDescription, applicantName }, onChunk, opts);
+  const r = redactContactDetails(resume);
+  return streamRedacted('/generate-cover-letter', r, { resume: r.text, jobDescription, applicantName }, onChunk, opts);
 }
 
 // ── Job comparison ────────────────────────────────────────────────────────────
@@ -64,7 +90,8 @@ export function compareJobs(
   jobDescriptions: JobComparisonJob[],
   opts?: RequestOptions
 ): Promise<AIResult<{ results: JobComparisonResult[] }>> {
-  return postAI('/compare-jobs', { resume, jobDescriptions }, opts);
+  const r = redactContactDetails(resume);
+  return postRedacted('/compare-jobs', r, { resume: r.text, jobDescriptions }, opts);
 }
 
 // ── Semantic analysis ─────────────────────────────────────────────────────────
@@ -113,13 +140,15 @@ export function semanticAnalyze(
   jobDescription: string,
   opts?: RequestOptions
 ): Promise<AIResult<SemanticAnalysisResult>> {
-  return postAI('/semantic-analysis', { resume, jobDescription }, opts);
+  const r = redactContactDetails(resume);
+  return postRedacted('/semantic-analysis', r, { resume: r.text, jobDescription }, opts);
 }
 
 // ── LinkedIn PDF parsing ──────────────────────────────────────────────────────
 
 export function parseLinkedIn(rawText: string, opts?: RequestOptions): Promise<AIResult<{ resume: string }>> {
-  return postAI('/parse-linkedin', { rawText }, opts);
+  const r = redactContactDetails(rawText);
+  return postRedacted('/parse-linkedin', r, { rawText: r.text }, opts);
 }
 
 // ── Interview prep ────────────────────────────────────────────────────────────
@@ -144,5 +173,6 @@ export function generateInterviewPrep(
   jobDescription: string,
   opts?: RequestOptions
 ): Promise<AIResult<InterviewPrepResult>> {
-  return postAI('/interview-prep', { resume, jobDescription }, opts);
+  const r = redactContactDetails(resume);
+  return postRedacted('/interview-prep', r, { resume: r.text, jobDescription }, opts);
 }

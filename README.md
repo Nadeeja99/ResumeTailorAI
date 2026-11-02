@@ -14,6 +14,7 @@
 - [AI engineering notes](#ai-engineering-notes)
 - [API](#api)
 - [Frontend](#frontend)
+- [Privacy](#privacy)
 - [Security and deployment](#security-and-deployment)
 - [Testing and CI](#testing-and-ci)
 - [Troubleshooting](#troubleshooting)
@@ -54,7 +55,7 @@ frontend/                 React 18 · Vite 8 · Tailwind 3 · shadcn/ui (Radix)
 backend/                  Node · Express · TypeScript (strict) · @google/genai
   src/services/llm/       client (fallback, timeouts, thinking), structured, text (streaming), telemetry, errors
   src/services/semantic/  chunking, calibration, lexical (hybrid matching)
-  src/prompts/            versioned prompts (v2: system/user split, injection guard)
+  src/prompts/            versioned prompts (system/user split, injection guard, placeholder note)
   src/lib/                aiRoute (JSON + SSE route wrappers), sse, logger
   src/config/env.ts       validated environment
 ```
@@ -111,7 +112,7 @@ All backend settings are validated at startup (`backend/src/config/env.ts`); inv
 
 **Structured output.** JSON endpoints send a Zod-derived JSON Schema as Gemini's `responseJsonSchema`, validate the reply with the same schema, and make one repair call with the validation errors if needed. Telemetry reports `valid`, `repaired` or `failed`.
 
-**Prompts v3.** Each prompt is a system instruction plus user content. Documents are wrapped in XML tags, declared as data rather than instructions, and closing tags inside a document are escaped so it cannot break out of its block. The prompt version is reported with every response. v3 tells the resume rewrite that an improvement suggestion never overrides the no-invention rule (under v2, a suggestion like "Add Docker" could).
+**Prompts v4.** Each prompt is a system instruction plus user content. Documents are wrapped in XML tags, declared as data rather than instructions, and closing tags inside a document are escaped so it cannot break out of its block. The prompt version is reported with every response. v3 tells the resume rewrite that an improvement suggestion never overrides the no-invention rule (under v2, a suggestion like "Add Docker" could). v4 tells every prompt that placeholders such as `[EMAIL_1]` stand for real contact details (see [Privacy](#privacy)).
 
 **Unsupported-term check.** A prompt is a request, not a guarantee: in a live v2 run, tailoring a resume listing "React, TypeScript, Node.js, AWS" to a Docker/Kubernetes job produced a rewrite claiming Docker, Kubernetes, CI/CD, PostgreSQL and GitHub Actions. After every complete rewrite, the server flags named terms (tools, technologies, title words) that appear in the job ad and the rewrite but nowhere in the original resume. It tolerates spelling variants such as Postgres ↔ PostgreSQL. The result is reported in telemetry (`unsupportedTerms`) and shown as a warning above the rewrite. It flags; it does not edit the rewrite.
 
@@ -155,6 +156,17 @@ Every response carries an `X-Request-Id` header that matches the backend's JSON 
 - **Resilience:** an error boundary per tool and at the root; the offline heuristic is used only when the AI is unreachable (network or 5xx), never to mask validation or rate-limit errors.
 - **Input UX:** ⌘/Ctrl+Enter to submit, Esc to stop streaming, autofocus, live character counts with the backend's exact limits.
 - **Performance:** about 125 kB gzipped of JS on first load, split into `react` and `ui` vendor chunks (long-cached) and a ~22 kB app chunk. PDF/DOCX parsing and export, Markdown + Prism, the diff view and the four secondary tools load on demand (tools prefetch on tab hover).
+
+## Privacy
+
+Built for the EU/GDPR baseline; `/privacy` and `/terms` describe it to users, and their owner details live in `frontend/src/lib/site.ts`.
+
+- **Contact-detail redaction.** Email addresses, phone numbers and profile links never leave the browser. `src/lib/redaction.ts` swaps them for placeholders (`[EMAIL_1]`, `[PHONE_1]`, `[LINKEDIN_1]`, `[GITHUB_1]`, `[URL_1]`) in every request from `resumeApi.ts`, and swaps them back in JSON results and streamed text, including placeholders split across chunks. A resume without contact details is sent unchanged. Phone detection needs 9–15 digits and skips year ranges and dates. The telemetry prompt inspector shows the redacted text, which is exactly what the model saw.
+- **No server-side storage** of resumes or job descriptions, and no resume text in logs. Files are parsed in the browser.
+- **No cookies, analytics or third-party requests:** fonts are self-hosted and the CSP's `connect-src` is `'self'`.
+- **Browser storage:** `rt-theme` (theme) and `resume_tailor_user_id` (a random usage ID stored with a monthly count in SQLite).
+
+If you change what is sent, stored or logged, update `src/pages/legal/Privacy.tsx` to match.
 
 ## Security and deployment
 

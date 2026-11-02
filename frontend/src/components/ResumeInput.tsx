@@ -69,6 +69,13 @@ export const ResumeInput = ({ resume, onResumeChange, onSourceChange }: ResumeIn
             <LinkedInImport onImported={text => importText(text)} />
           </TabsContent>
         </Tabs>
+        <p className="mt-3 text-xs text-muted-foreground">
+          Email addresses, phone numbers and profile links are replaced with placeholders before your resume is sent to
+          the AI, and restored in the results.{' '}
+          <a href="/privacy" target="_blank" rel="noreferrer" className="underline hover:text-foreground">
+            Privacy
+          </a>
+        </p>
       </CardContent>
     </Card>
   );

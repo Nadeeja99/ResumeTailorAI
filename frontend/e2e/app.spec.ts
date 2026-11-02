@@ -64,6 +64,20 @@ test.describe('App shell', () => {
     await expect(page.getByText('no keyword match')).toBeVisible();
   });
 
+  test('links to the privacy notice and terms', async ({ page }) => {
+    await mockApi(page, {});
+    await page.goto('/');
+    const legal = page.getByRole('navigation', { name: 'Legal' });
+    await expect(legal.getByRole('link', { name: 'Privacy' })).toHaveAttribute('href', '/privacy');
+    await expect(legal.getByRole('link', { name: 'Terms' })).toHaveAttribute('href', '/terms');
+
+    await page.goto('/privacy');
+    await expect(page.getByRole('heading', { name: 'Privacy notice', level: 1 })).toBeVisible();
+    await expect(page.getByRole('link', { name: 'Data Protection Commission' })).toBeVisible();
+    await page.goto('/terms');
+    await expect(page.getByRole('heading', { name: 'Terms of use', level: 1 })).toBeVisible();
+  });
+
   test('renders a friendly 404', async ({ page }) => {
     await mockApi(page, {});
     await page.goto('/does-not-exist');

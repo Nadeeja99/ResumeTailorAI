@@ -29,9 +29,17 @@ export function AppShell({ children, actions }: AppShellProps) {
       <main className="container flex-1 py-10 sm:py-12">{children}</main>
 
       <footer className="border-t">
-        <div className="container flex h-14 items-center justify-between text-xs text-muted-foreground">
-          <span>ResumeTailor · AI resume tailoring</span>
-          <span>Powered by Gemini</span>
+        <div className="container flex flex-wrap items-center justify-between gap-x-6 gap-y-2 py-4 text-xs text-muted-foreground">
+          <span>ResumeTailor · AI resume tailoring · Powered by Gemini</span>
+          {/* New tab, so following a link never discards a resume in progress */}
+          <nav aria-label="Legal" className="flex gap-4">
+            <a href="/privacy" target="_blank" rel="noreferrer" className="hover:text-foreground hover:underline">
+              Privacy
+            </a>
+            <a href="/terms" target="_blank" rel="noreferrer" className="hover:text-foreground hover:underline">
+              Terms
+            </a>
+          </nav>
         </div>
       </footer>
     </div>

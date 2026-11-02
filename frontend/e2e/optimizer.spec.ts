@@ -1,4 +1,4 @@
-import { ANALYSIS, expect, fillInputs, json, mockApi, sse, telemetry, test } from './fixtures';
+import { ANALYSIS, expect, fillInputs, json, mockApi, RESUME, sse, telemetry, test } from './fixtures';
 
 test.describe('Optimizer', () => {
   test('analyzes with ⌘/Ctrl+Enter, streams a tailored resume, and exports it', async ({ page }) => {
@@ -31,6 +31,34 @@ test.describe('Optimizer', () => {
     await page.getByRole('tab', { name: /changes/i }).click();
     // diffWords may split the added sentence across several <mark>s
     await expect(page.locator('mark').filter({ hasText: 'Tailored' }).first()).toBeVisible();
+  });
+
+  test('keeps contact details in the browser and restores them in the rewrite', async ({ page }) => {
+    const sent: string[] = [];
+    await mockApi(page, {
+      '/analyze': route => {
+        sent.push(route.request().postData() ?? '');
+        return route.fulfill(json({ data: ANALYSIS, telemetry: telemetry() }));
+      },
+      '/generate-improved': route => {
+        sent.push(route.request().postData() ?? '');
+        // The placeholder is split across chunks, as a real stream can do
+        return route.fulfill(sse(['# Alex Rivera\n[EMA', 'IL_1] · [PHONE_1]\n\n', '## Summary\nTailored.\n']));
+      },
+    });
+    await page.goto('/');
+    await fillInputs(page, RESUME.replace('Alex Rivera', 'Alex Rivera\nalex@example.com · +353 87 123 4567'));
+    await page.locator('#job-description-text').press('ControlOrMeta+Enter');
+    await page.getByRole('button', { name: /generate tailored resume/i }).click();
+
+    // The rewrite renders the restored email as a mailto link; no placeholder ever reaches the screen
+    await expect(page.getByRole('link', { name: 'alex@example.com' })).toHaveAttribute('href', 'mailto:alex@example.com');
+    await expect(page.getByText(/\[(EMAIL|PHONE)_1\]/)).toHaveCount(0);
+    expect(sent).toHaveLength(2);
+    for (const body of sent) {
+      expect(body).toContain('[EMAIL_1]');
+      expect(body).not.toMatch(/alex@example\.com|123 4567/);
+    }
   });
 
   test('cancels an analysis and stops a generation (Esc) without errors', async ({ page }) => {
